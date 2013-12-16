@@ -1507,6 +1507,7 @@ struct v4l2_ext_controls {
 		__u32 ctrl_class;
 #endif
 		__u32 which;
+		__u32 request;
 	};
 	__u32 count;
 	__u32 error_idx;
