@@ -3534,6 +3534,48 @@ unlock:
 }
 EXPORT_SYMBOL(v4l2_ctrl_apply_request);
 
+int v4l2_ctrl_delete_request(struct v4l2_ctrl_handler *hdl, unsigned request)
+{
+	struct v4l2_ctrl_ref *ref;
+	unsigned i;
+
+	if (hdl == NULL || request == 0)
+		return -EINVAL;
+
+	mutex_lock(hdl->lock);
+
+	list_for_each_entry(ref, &hdl->ctrl_refs, node) {
+		struct v4l2_ctrl *master;
+
+		if (ref->ctrl->max_reqs == 0)
+			continue;
+		master = ref->ctrl->cluster[0];
+		if (ref->ctrl != master)
+			continue;
+		if (master->handler != hdl)
+			v4l2_ctrl_lock(master);
+		for (i = 0; i < master->ncontrols; i++) {
+			struct v4l2_ctrl *ctrl = master->cluster[i];
+			struct v4l2_ctrl_req *req;
+
+			if (ctrl == NULL || ctrl->request_lists == NULL)
+				continue;
+
+			if (request == 0) {
+				free_requests(ctrl);
+				continue;
+			}
+			req = get_request(ctrl, request);
+			if (req)
+				del_request(ctrl, req);
+		}
+		if (master->handler != hdl)
+			v4l2_ctrl_unlock(master);
+	}
+	return 0;
+}
+EXPORT_SYMBOL(v4l2_ctrl_delete_request);
+
 void v4l2_ctrl_notify(struct v4l2_ctrl *ctrl, v4l2_ctrl_notify_fnc notify, void *priv)
 {
 	if (ctrl == NULL)

@@ -989,6 +989,7 @@ static inline void v4l2_ctrl_s_max_reqs(struct v4l2_ctrl *ctrl, u16 max_reqs)
 }
 
 int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request);
+int v4l2_ctrl_delete_request(struct v4l2_ctrl_handler *hdl, unsigned request);
 
 /* Internal helper functions that deal with control events. */
 extern const struct v4l2_subscribed_event_ops v4l2_ctrl_sub_ev_ops;
