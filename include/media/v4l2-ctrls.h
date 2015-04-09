@@ -916,12 +916,14 @@ int v4l2_ctrl_subscribe_event(struct v4l2_fh *fh,
 unsigned int v4l2_ctrl_poll(struct file *file, struct poll_table_struct *wait);
 
 /* Helpers for ioctl_ops. If hdl == NULL then they will all return -EINVAL. */
-int v4l2_queryctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_queryctrl *qc);
+int v4l2_queryctrl(struct v4l2_ctrl_handler *hdl,
+		   unsigned request, struct v4l2_queryctrl *qc);
 int v4l2_query_ext_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_query_ext_ctrl *qc);
 int v4l2_querymenu(struct v4l2_ctrl_handler *hdl, struct v4l2_querymenu *qm);
-int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_control *ctrl);
+int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl,
+		unsigned request, struct v4l2_control *ctrl);
 int v4l2_s_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
-						struct v4l2_control *ctrl);
+		unsigned request, struct v4l2_control *ctrl);
 int v4l2_g_ext_ctrls(struct v4l2_ctrl_handler *hdl, struct v4l2_ext_controls *c);
 int v4l2_try_ext_ctrls(struct v4l2_ctrl_handler *hdl, struct v4l2_ext_controls *c);
 int v4l2_s_ext_ctrls(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,

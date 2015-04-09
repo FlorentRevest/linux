@@ -190,28 +190,48 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 	switch (cmd) {
 	case VIDIOC_QUERYCTRL:
-		return v4l2_queryctrl(vfh->ctrl_handler, arg);
+		return v4l2_queryctrl(vfh->ctrl_handler, vfh->request, arg);
 
-	case VIDIOC_QUERY_EXT_CTRL:
+	case VIDIOC_QUERY_EXT_CTRL: {
+		struct v4l2_query_ext_ctrl *p = arg;
+
+		if (vfh->request && p->request == 0)
+			p->request = vfh->request;
 		return v4l2_query_ext_ctrl(vfh->ctrl_handler, arg);
+	}
 
 	case VIDIOC_QUERYMENU:
 		return v4l2_querymenu(vfh->ctrl_handler, arg);
 
 	case VIDIOC_G_CTRL:
-		return v4l2_g_ctrl(vfh->ctrl_handler, arg);
+		return v4l2_g_ctrl(vfh->ctrl_handler, vfh->request, arg);
 
 	case VIDIOC_S_CTRL:
-		return v4l2_s_ctrl(vfh, vfh->ctrl_handler, arg);
+		return v4l2_s_ctrl(vfh, vfh->ctrl_handler, vfh->request, arg);
 
-	case VIDIOC_G_EXT_CTRLS:
+	case VIDIOC_G_EXT_CTRLS: {
+		struct v4l2_ext_controls *p = arg;
+
+		if (vfh->request && p->request == 0)
+			p->request = vfh->request;
 		return v4l2_g_ext_ctrls(vfh->ctrl_handler, arg);
+	}
 
-	case VIDIOC_S_EXT_CTRLS:
+	case VIDIOC_S_EXT_CTRLS: {
+		struct v4l2_ext_controls *p = arg;
+
+		if (vfh->request && p->request == 0)
+			p->request = vfh->request;
 		return v4l2_s_ext_ctrls(vfh, vfh->ctrl_handler, arg);
+	}
 
-	case VIDIOC_TRY_EXT_CTRLS:
+	case VIDIOC_TRY_EXT_CTRLS: {
+		struct v4l2_ext_controls *p = arg;
+
+		if (vfh->request && p->request == 0)
+			p->request = vfh->request;
 		return v4l2_try_ext_ctrls(vfh->ctrl_handler, arg);
+	}
 
 	case VIDIOC_DQEVENT:
 		if (!(sd->flags & V4L2_SUBDEV_FL_HAS_EVENTS))
@@ -224,6 +244,35 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 	case VIDIOC_UNSUBSCRIBE_EVENT:
 		return v4l2_subdev_call(sd, core, unsubscribe_event, vfh, arg);
+
+	case VIDIOC_REQUEST_CMD: {
+		struct v4l2_request_cmd *p = arg;
+
+		if (p->request > USHRT_MAX)
+			return -EINVAL;
+
+		switch (p->cmd) {
+		case V4L2_REQ_CMD_BEGIN:
+			if (vfh->request)
+				return -EBUSY;
+			if (p->request == 0)
+				return -EINVAL;
+			vfh->request = p->request;
+			break;
+		case V4L2_REQ_CMD_END:
+			vfh->request = 0;
+			break;
+		case V4L2_REQ_CMD_DELETE:
+			return v4l2_ctrl_delete_request(vfh->ctrl_handler,
+							p->request);
+		case V4L2_REQ_CMD_APPLY:
+			return v4l2_ctrl_apply_request(vfh->ctrl_handler,
+						       p->request);
+		default:
+			return -EINVAL;
+		}
+		return 0;
+	}
 
 #ifdef CONFIG_VIDEO_ADV_DEBUG
 	case VIDIOC_DBG_G_REGISTER:
