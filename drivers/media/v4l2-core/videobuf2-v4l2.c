@@ -204,6 +204,7 @@ static void __fill_v4l2_buffer(struct vb2_buffer *vb, void *pb)
 	b->timestamp = ns_to_timeval(vb->timestamp);
 	b->timecode = vbuf->timecode;
 	b->sequence = vbuf->sequence;
+	b->request = vbuf->request;
 	b->reserved2 = 0;
 	b->reserved = 0;
 
@@ -437,6 +438,8 @@ static int __fill_vb2_buffer(struct vb2_buffer *vb,
 		/* Zero any output buffer flags as this is a capture buffer */
 		vbuf->flags &= ~V4L2_BUFFER_OUT_FLAGS;
 	}
+
+	vbuf->request = b->request;
 
 	return 0;
 }
