@@ -1023,7 +1023,8 @@ unsigned int v4l2_ctrl_poll(struct file *file, struct poll_table_struct *wait);
  *
  * If hdl == NULL then they will all return -EINVAL.
  */
-int v4l2_queryctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_queryctrl *qc);
+int v4l2_queryctrl(struct v4l2_ctrl_handler *hdl,
+		   unsigned request, struct v4l2_queryctrl *qc);
 
 /**
  * v4l2_query_ext_ctrl - Helper function to implement
@@ -1057,7 +1058,8 @@ int v4l2_querymenu(struct v4l2_ctrl_handler *hdl, struct v4l2_querymenu *qm);
  *
  * If hdl == NULL then they will all return -EINVAL.
  */
-int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_control *ctrl);
+int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl,
+		unsigned request, struct v4l2_control *ctrl);
 
 /**
  * v4l2_s_ctrl - Helper function to implement
@@ -1071,7 +1073,7 @@ int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_control *ctrl);
  * If hdl == NULL then they will all return -EINVAL.
  */
 int v4l2_s_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
-		struct v4l2_control *ctrl);
+		unsigned request, struct v4l2_control *ctrl);
 
 /**
  * v4l2_g_ext_ctrls - Helper function to implement
