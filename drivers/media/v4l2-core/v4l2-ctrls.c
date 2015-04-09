@@ -2716,9 +2716,13 @@ int v4l2_query_ext_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_query_ext_ctr
 EXPORT_SYMBOL(v4l2_query_ext_ctrl);
 
 /* Implement VIDIOC_QUERYCTRL */
-int v4l2_queryctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_queryctrl *qc)
+int v4l2_queryctrl(struct v4l2_ctrl_handler *hdl,
+		   unsigned request, struct v4l2_queryctrl *qc)
 {
-	struct v4l2_query_ext_ctrl qec = { qc->id };
+	struct v4l2_query_ext_ctrl qec = {
+		.id = qc->id,
+		.request = request,
+	};
 	int rc;
 
 	rc = v4l2_query_ext_ctrl(hdl, &qec);
@@ -3045,7 +3049,8 @@ int v4l2_g_ext_ctrls(struct v4l2_ctrl_handler *hdl, struct v4l2_ext_controls *cs
 EXPORT_SYMBOL(v4l2_g_ext_ctrls);
 
 /* Helper function to get a single control */
-static int get_ctrl(struct v4l2_ctrl *ctrl, struct v4l2_ext_control *c)
+static int get_ctrl(struct v4l2_ctrl *ctrl,
+		    unsigned request, struct v4l2_ext_control *c)
 {
 	struct v4l2_ctrl *master = ctrl->cluster[0];
 	int ret = 0;
@@ -3063,11 +3068,17 @@ static int get_ctrl(struct v4l2_ctrl *ctrl, struct v4l2_ext_control *c)
 
 	v4l2_ctrl_lock(master);
 	/* g_volatile_ctrl will update the current control values */
-	if (ctrl->flags & V4L2_CTRL_FLAG_VOLATILE) {
+	if (request == 0 && (ctrl->flags & V4L2_CTRL_FLAG_VOLATILE)) {
 		for (i = 0; i < master->ncontrols; i++)
 			cur_to_new(master->cluster[i]);
 		ret = call_op(master, g_volatile_ctrl);
 		new_to_user(c, ctrl);
+	} else if (request) {
+		ctrl->request = get_request(ctrl, request);
+		if (ctrl->request)
+			ptr_to_user(c, ctrl, ctrl->request->ptr);
+		else
+			ret = -EINVAL;
 	} else {
 		cur_to_user(c, ctrl);
 	}
@@ -3075,7 +3086,8 @@ static int get_ctrl(struct v4l2_ctrl *ctrl, struct v4l2_ext_control *c)
 	return ret;
 }
 
-int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_control *control)
+int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl,
+		unsigned request, struct v4l2_control *control)
 {
 	struct v4l2_ctrl *ctrl = v4l2_ctrl_find(hdl, control->id);
 	struct v4l2_ext_control c;
@@ -3083,7 +3095,7 @@ int v4l2_g_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_control *control)
 
 	if (ctrl == NULL || !ctrl->is_int)
 		return -EINVAL;
-	ret = get_ctrl(ctrl, &c);
+	ret = get_ctrl(ctrl, request, &c);
 	control->value = c.value;
 	return ret;
 }
@@ -3096,7 +3108,7 @@ s32 v4l2_ctrl_g_ctrl(struct v4l2_ctrl *ctrl)
 	/* It's a driver bug if this happens. */
 	WARN_ON(!ctrl->is_int);
 	c.value = 0;
-	get_ctrl(ctrl, &c);
+	get_ctrl(ctrl, 0, &c);
 	return c.value;
 }
 EXPORT_SYMBOL(v4l2_ctrl_g_ctrl);
@@ -3108,7 +3120,7 @@ s64 v4l2_ctrl_g_ctrl_int64(struct v4l2_ctrl *ctrl)
 	/* It's a driver bug if this happens. */
 	WARN_ON(ctrl->is_ptr || ctrl->type != V4L2_CTRL_TYPE_INTEGER64);
 	c.value64 = 0;
-	get_ctrl(ctrl, &c);
+	get_ctrl(ctrl, 0, &c);
 	return c.value64;
 }
 EXPORT_SYMBOL(v4l2_ctrl_g_ctrl_int64);
@@ -3358,7 +3370,8 @@ int v4l2_s_ext_ctrls(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
 EXPORT_SYMBOL(v4l2_s_ext_ctrls);
 
 /* Helper function for VIDIOC_S_CTRL compatibility */
-static int set_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl, u32 ch_flags)
+static int set_ctrl(struct v4l2_fh *fh, unsigned request,
+		    struct v4l2_ctrl *ctrl, u32 ch_flags)
 {
 	struct v4l2_ctrl *master = ctrl->cluster[0];
 	int ret;
@@ -3378,23 +3391,24 @@ static int set_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl, u32 ch_flags)
 	/* For autoclusters with volatiles that are switched from auto to
 	   manual mode we have to update the current volatile values since
 	   those will become the initial manual values after such a switch. */
-	if (master->is_auto && master->has_volatiles && ctrl == master &&
+	if (request == 0 &&
+	    master->is_auto && master->has_volatiles && ctrl == master &&
 	    !is_cur_manual(master) && ctrl->val == master->manual_mode_value)
 		update_from_auto_cluster(master);
 
 	ctrl->is_new = 1;
-	return try_or_set_cluster(fh, master, 0, true, ch_flags);
+	return try_or_set_cluster(fh, master, request, true, ch_flags);
 }
 
 /* Helper function for VIDIOC_S_CTRL compatibility */
-static int set_ctrl_lock(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl,
-			 struct v4l2_ext_control *c)
+static int set_ctrl_lock(struct v4l2_fh *fh, unsigned request,
+			 struct v4l2_ctrl *ctrl, struct v4l2_ext_control *c)
 {
 	int ret;
 
 	v4l2_ctrl_lock(ctrl);
 	user_to_new(c, ctrl);
-	ret = set_ctrl(fh, ctrl, 0);
+	ret = set_ctrl(fh, request, ctrl, 0);
 	if (!ret)
 		cur_to_user(c, ctrl);
 	v4l2_ctrl_unlock(ctrl);
@@ -3402,7 +3416,7 @@ static int set_ctrl_lock(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl,
 }
 
 int v4l2_s_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
-					struct v4l2_control *control)
+		unsigned request, struct v4l2_control *control)
 {
 	struct v4l2_ctrl *ctrl = v4l2_ctrl_find(hdl, control->id);
 	struct v4l2_ext_control c = { control->id };
@@ -3415,7 +3429,7 @@ int v4l2_s_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
 		return -EACCES;
 
 	c.value = control->value;
-	ret = set_ctrl_lock(fh, ctrl, &c);
+	ret = set_ctrl_lock(fh, request, ctrl, &c);
 	control->value = c.value;
 	return ret;
 }
@@ -3428,7 +3442,7 @@ int __v4l2_ctrl_s_ctrl(struct v4l2_ctrl *ctrl, s32 val)
 	/* It's a driver bug if this happens. */
 	WARN_ON(!ctrl->is_int);
 	ctrl->val = val;
-	return set_ctrl(NULL, ctrl, 0);
+	return set_ctrl(NULL, 0, ctrl, 0);
 }
 EXPORT_SYMBOL(__v4l2_ctrl_s_ctrl);
 
@@ -3439,7 +3453,7 @@ int __v4l2_ctrl_s_ctrl_int64(struct v4l2_ctrl *ctrl, s64 val)
 	/* It's a driver bug if this happens. */
 	WARN_ON(ctrl->is_ptr || ctrl->type != V4L2_CTRL_TYPE_INTEGER64);
 	*ctrl->p_new.p_s64 = val;
-	return set_ctrl(NULL, ctrl, 0);
+	return set_ctrl(NULL, 0, ctrl, 0);
 }
 EXPORT_SYMBOL(__v4l2_ctrl_s_ctrl_int64);
 
@@ -3450,7 +3464,7 @@ int __v4l2_ctrl_s_ctrl_string(struct v4l2_ctrl *ctrl, const char *s)
 	/* It's a driver bug if this happens. */
 	WARN_ON(ctrl->type != V4L2_CTRL_TYPE_STRING);
 	strlcpy(ctrl->p_new.p_char, s, ctrl->maximum + 1);
-	return set_ctrl(NULL, ctrl, 0);
+	return set_ctrl(NULL, 0, ctrl, 0);
 }
 EXPORT_SYMBOL(__v4l2_ctrl_s_ctrl_string);
 
@@ -3641,7 +3655,7 @@ int __v4l2_ctrl_modify_range(struct v4l2_ctrl *ctrl,
 	else
 		value_changed = *ctrl->p_new.p_s32 != *ctrl->p_cur.p_s32;
 	if (value_changed)
-		ret = set_ctrl(NULL, ctrl, V4L2_EVENT_CTRL_CH_RANGE);
+		ret = set_ctrl(NULL, 0, ctrl, V4L2_EVENT_CTRL_CH_RANGE);
 	else if (range_changed)
 		send_event(NULL, ctrl, V4L2_EVENT_CTRL_CH_RANGE);
 	return ret;

@@ -2214,6 +2214,21 @@ struct v4l2_create_buffers {
 	__u32			reserved[8];
 };
 
+#define V4L2_REQ_CMD_BEGIN	(0)
+#define V4L2_REQ_CMD_END	(1)
+#define V4L2_REQ_CMD_DELETE	(2)
+#define V4L2_REQ_CMD_APPLY	(3)
+
+struct v4l2_request_cmd {
+	__u32 cmd;
+	__u16 request;
+	__u16 flags;
+	union {
+		struct {
+			__u32 data[8];
+		} raw;
+	};
+};
 /*
  *	I O C T L   C O D E S   F O R   V I D E O   D E V I C E S
  *
@@ -2314,6 +2329,8 @@ struct v4l2_create_buffers {
 #define VIDIOC_DBG_G_CHIP_INFO  _IOWR('V', 102, struct v4l2_dbg_chip_info)
 
 #define VIDIOC_QUERY_EXT_CTRL	_IOWR('V', 103, struct v4l2_query_ext_ctrl)
+
+#define VIDIOC_REQUEST_CMD      _IOWR('V', 104, struct v4l2_request_cmd)
 
 /* Reminder: when adding new ioctls please add support for them to
    drivers/media/v4l2-core/v4l2-compat-ioctl32.c as well! */
