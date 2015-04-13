@@ -579,6 +579,48 @@ int vb2_qbuf(struct vb2_queue *q, struct v4l2_buffer *b)
 }
 EXPORT_SYMBOL_GPL(vb2_qbuf);
 
+int vb2_qbuf_request(struct vb2_queue *q, u16 request, struct vb2_buffer **p_buf)
+{
+	struct v4l2_buffer v4l2_buf;
+	int buffer;
+
+	for (buffer = 0; buffer < q->num_buffers; buffer++) {
+		struct vb2_buffer *vb = q->bufs[buffer];
+		struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+
+		if (vbuf->request == request &&
+		    vb->state == VB2_BUF_STATE_PREPARED) {
+			if (p_buf)
+				*p_buf = vb;
+			__fill_v4l2_buffer(vb, &v4l2_buf);
+			return vb2_qbuf(q, &v4l2_buf);
+		}
+	}
+	return -ENOENT;
+}
+EXPORT_SYMBOL_GPL(vb2_qbuf_request);
+
+/**
+ * vb2_dqbuf() - Dequeue a buffer to the userspace
+ * @q:		videobuf2 queue
+ * @b:		buffer structure passed from userspace to vidioc_dqbuf handler
+ *		in driver
+ * @nonblocking: if true, this call will not sleep waiting for a buffer if no
+ *		 buffers ready for dequeuing are present. Normally the driver
+ *		 would be passing (file->f_flags & O_NONBLOCK) here
+ *
+ * Should be called from vidioc_dqbuf ioctl handler of a driver.
+ * This function:
+ * 1) verifies the passed buffer,
+ * 2) calls buf_finish callback in the driver (if provided), in which
+ *    driver can perform any additional operations that may be required before
+ *    returning the buffer to userspace, such as cache sync,
+ * 3) the buffer struct members are filled with relevant information for
+ *    the userspace.
+ *
+ * The return values from this function are intended to be directly returned
+ * from vidioc_dqbuf handler in driver.
+ */
 int vb2_dqbuf(struct vb2_queue *q, struct v4l2_buffer *b, bool nonblocking)
 {
 	int ret;
