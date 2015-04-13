@@ -97,6 +97,12 @@ struct v4l2_ctrl_type_ops {
 
 typedef void (*v4l2_ctrl_notify_fnc)(struct v4l2_ctrl *ctrl, void *priv);
 
+struct v4l2_ctrl_req {
+	struct list_head node;
+	u32 request;
+	union v4l2_ctrl_ptr ptr;
+};
+
 /**
  * struct v4l2_ctrl - The control structure.
  * @node:	The list node.
@@ -146,6 +152,9 @@ typedef void (*v4l2_ctrl_notify_fnc)(struct v4l2_ctrl *ctrl, void *priv);
  * @elem_size:	The size in bytes of the control.
  * @dims:	The size of each dimension.
  * @nr_of_dims:The number of dimensions in @dims.
+ * @nr_of_requests: The number of allocated requests of this control.
+ * @max_reqs:	The maximum number of requests supported by this control.
+ * @request:	The request that the control op operates on.
  * @menu_skip_mask: The control's skip mask for menu controls. This makes it
  *		easy to skip menu items that are not valid. If bit X is set,
  *		then menu item X is skipped. Of course, this only works for
@@ -202,6 +211,9 @@ struct v4l2_ctrl {
 	u32 elem_size;
 	u32 dims[V4L2_CTRL_MAX_DIMS];
 	u32 nr_of_dims;
+	u16 nr_of_requests;
+	u16 max_reqs;
+	struct v4l2_ctrl_req *request;
 	union {
 		u64 step;
 		u64 menu_skip_mask;
@@ -219,6 +231,7 @@ struct v4l2_ctrl {
 
 	union v4l2_ctrl_ptr p_new;
 	union v4l2_ctrl_ptr p_cur;
+	struct list_head *request_lists;
 };
 
 /**
@@ -300,6 +313,7 @@ struct v4l2_ctrl_handler {
  * 		V4L2_CTRL_TYPE_INTEGER_MENU.
  * @is_private: If set, then this control is private to its handler and it
  *		will not be added to any other handlers.
+ * @max_reqs:	The maximum number of requests supported by this control.
  */
 struct v4l2_ctrl_config {
 	const struct v4l2_ctrl_ops *ops;
@@ -318,6 +332,7 @@ struct v4l2_ctrl_config {
 	const char * const *qmenu;
 	const s64 *qmenu_int;
 	unsigned int is_private:1;
+	u16 max_reqs;
 };
 
 /*
@@ -872,6 +887,11 @@ static inline int v4l2_ctrl_s_ctrl_string(struct v4l2_ctrl *ctrl, const char *s)
 	v4l2_ctrl_unlock(ctrl);
 
 	return rval;
+}
+
+static inline void v4l2_ctrl_s_max_reqs(struct v4l2_ctrl *ctrl, u16 max_reqs)
+{
+	ctrl->max_reqs = max_reqs;
 }
 
 /* Internal helper functions that deal with control events. */
