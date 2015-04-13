@@ -666,6 +666,7 @@ static int vivid_create_instance(struct platform_device *pdev, int inst)
 		return ret;
 	}
 	dev->v4l2_dev.release = vivid_dev_release;
+	dev->v4l2_dev.req_queue = v4l2_device_req_queue;
 
 	/* start detecting feature set */
 
@@ -1053,6 +1054,7 @@ static int vivid_create_instance(struct platform_device *pdev, int inst)
 		q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 		q->min_buffers_needed = 2;
 		q->lock = &dev->mutex;
+		q->v4l2_allow_requests = 1;
 
 		ret = vb2_queue_init(q);
 		if (ret)

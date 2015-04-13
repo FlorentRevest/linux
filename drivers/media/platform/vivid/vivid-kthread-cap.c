@@ -700,6 +700,8 @@ static void vivid_thread_vid_cap_tick(struct vivid_dev *dev, int dropped_bufs)
 	if (!list_empty(&dev->vid_cap_active)) {
 		vid_cap_buf = list_entry(dev->vid_cap_active.next, struct vivid_buffer, list);
 		list_del(&vid_cap_buf->list);
+		v4l2_ctrl_apply_request(dev->vid_cap_dev.ctrl_handler,
+					vid_cap_buf->vb.request);
 	}
 	if (!list_empty(&dev->vbi_cap_active)) {
 		if (dev->field_cap != V4L2_FIELD_ALTERNATE ||

@@ -1387,12 +1387,16 @@ int vivid_create_controls(struct vivid_dev *dev, bool show_ccs_cap,
 			V4L2_CID_BRIGHTNESS, 0, 255, 1, 128);
 		for (i = 0; i < MAX_INPUTS; i++)
 			dev->input_brightness[i] = 128;
+		v4l2_ctrl_s_max_reqs(dev->brightness, VIDEO_MAX_FRAME);
 		dev->contrast = v4l2_ctrl_new_std(hdl_user_vid, &vivid_user_vid_ctrl_ops,
 			V4L2_CID_CONTRAST, 0, 255, 1, 128);
+		v4l2_ctrl_s_max_reqs(dev->contrast, VIDEO_MAX_FRAME);
 		dev->saturation = v4l2_ctrl_new_std(hdl_user_vid, &vivid_user_vid_ctrl_ops,
 			V4L2_CID_SATURATION, 0, 255, 1, 128);
+		v4l2_ctrl_s_max_reqs(dev->saturation, VIDEO_MAX_FRAME);
 		dev->hue = v4l2_ctrl_new_std(hdl_user_vid, &vivid_user_vid_ctrl_ops,
 			V4L2_CID_HUE, -128, 128, 1, 0);
+		v4l2_ctrl_s_max_reqs(dev->hue, VIDEO_MAX_FRAME);
 		v4l2_ctrl_new_std(hdl_user_vid, &vivid_user_vid_ctrl_ops,
 			V4L2_CID_HFLIP, 0, 1, 1, 0);
 		v4l2_ctrl_new_std(hdl_user_vid, &vivid_user_vid_ctrl_ops,
