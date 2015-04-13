@@ -108,6 +108,7 @@ typedef void (*v4l2_ctrl_notify_fnc)(struct v4l2_ctrl *ctrl, void *priv);
 struct v4l2_ctrl_req {
 	struct list_head node;
 	u32 request;
+	unsigned applied:1;
 	union v4l2_ctrl_ptr ptr;
 };
 
@@ -986,6 +987,8 @@ static inline void v4l2_ctrl_s_max_reqs(struct v4l2_ctrl *ctrl, u16 max_reqs)
 {
 	ctrl->max_reqs = max_reqs;
 }
+
+int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request);
 
 /* Internal helper functions that deal with control events. */
 extern const struct v4l2_subscribed_event_ops v4l2_ctrl_sub_ev_ops;

@@ -1723,8 +1723,10 @@ static void new_to_cur(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl, u32 ch_flags)
 /* Helper function: copy the new control value to the request */
 static void new_to_request(struct v4l2_ctrl *ctrl)
 {
-	if (ctrl)
+	if (ctrl) {
 		ptr_to_ptr(ctrl, ctrl->p_new, ctrl->request->ptr);
+		ctrl->request->applied = 0;
+	}
 }
 
 /* Copy the current value to the new value */
@@ -1733,6 +1735,17 @@ static void cur_to_new(struct v4l2_ctrl *ctrl)
 	if (ctrl == NULL)
 		return;
 	ptr_to_ptr(ctrl, ctrl->p_cur, ctrl->p_new);
+}
+
+static void request_to_new(struct v4l2_ctrl *ctrl)
+{
+	if (ctrl == NULL)
+		return;
+	if (ctrl->request)
+		ptr_to_ptr(ctrl, ctrl->request->ptr, ctrl->p_new);
+	else
+		ptr_to_ptr(ctrl, ctrl->p_cur, ctrl->p_new);
+	ctrl->is_new = true;
 }
 
 /* Return non-zero if one or more of the controls in the cluster has a new
@@ -2600,6 +2613,7 @@ int v4l2_query_ext_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_query_ext_ctr
 	u32 id = qc->id & V4L2_CTRL_ID_MASK;
 	u32 req = qc->request;
 	struct v4l2_ctrl_ref *ref;
+	struct v4l2_ctrl_req *ctrl_req = NULL;
 	struct v4l2_ctrl *ctrl;
 
 	if (hdl == NULL || req > USHRT_MAX)
@@ -2663,8 +2677,11 @@ int v4l2_query_ext_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_query_ext_ctr
 
 	if (!ref)
 		return -EINVAL;
-	if (req && get_request(ref->ctrl, req) == NULL)
-		return -EINVAL;
+	if (req) {
+		ctrl_req = get_request(ref->ctrl, req);
+		if (ctrl_req == NULL)
+			return -EINVAL;
+	}
 
 	ctrl = ref->ctrl;
 	memset(qc, 0, sizeof(*qc));
@@ -2674,6 +2691,10 @@ int v4l2_query_ext_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_query_ext_ctr
 		qc->id = ctrl->id;
 	strlcpy(qc->name, ctrl->name, sizeof(qc->name));
 	qc->flags = ctrl->flags;
+	if (req) {
+		if (ctrl_req->applied)
+			qc->flags |= V4L2_CTRL_FLAG_REQ_APPLIED;
+	}
 	qc->max_reqs = ctrl->max_reqs;
 	qc->type = ctrl->type;
 	if (ctrl->is_ptr)
@@ -2822,7 +2843,7 @@ static int prepare_ext_ctrls(struct v4l2_ctrl_handler *hdl,
 			     bool get)
 {
 	u32 which = V4L2_CTRL_ID2WHICH(cs->which);
-	unsigned request = cs->request & 0xffff;
+	unsigned request = cs->request & USHRT_MAX;
 	struct v4l2_ctrl_helper *h;
 	bool have_clusters = false;
 	u32 i;
@@ -3204,7 +3225,7 @@ static void update_from_auto_cluster(struct v4l2_ctrl *master)
 		if (master->cluster[i] == NULL)
 			continue;
 		cur_to_new(master->cluster[i]);
-		master->cluster[i]->request = 0;
+		master->cluster[i]->request = NULL;
 	}
 	if (!call_op(master, g_volatile_ctrl))
 		for (i = 1; i < master->ncontrols; i++)
@@ -3348,7 +3369,6 @@ static int set_ctrl(struct v4l2_fh *fh, struct v4l2_ctrl *ctrl, u32 ch_flags)
 		if (master->cluster[i] == NULL)
 			continue;
 		master->cluster[i]->is_new = 0;
-		master->cluster[i]->request = NULL;
 	}
 
 	ret = validate_new(ctrl, ctrl->p_new);
@@ -3433,6 +3453,86 @@ int __v4l2_ctrl_s_ctrl_string(struct v4l2_ctrl *ctrl, const char *s)
 	return set_ctrl(NULL, ctrl, 0);
 }
 EXPORT_SYMBOL(__v4l2_ctrl_s_ctrl_string);
+
+int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request)
+{
+	struct v4l2_ctrl_ref *ref;
+	bool found_request = false;
+	int ret = 0;
+	unsigned i;
+
+	if (hdl == NULL)
+		return -EINVAL;
+	if (request == 0)
+		return 0;
+
+	mutex_lock(hdl->lock);
+
+	list_for_each_entry(ref, &hdl->ctrl_refs, node) {
+		struct v4l2_ctrl *master;
+		bool apply_request = false;
+
+		if (ref->ctrl->max_reqs == 0)
+			continue;
+		master = ref->ctrl->cluster[0];
+		if (ref->ctrl != master)
+			continue;
+		if (master->handler != hdl)
+			v4l2_ctrl_lock(master);
+		for (i = 0; !ret && i < master->ncontrols; i++) {
+			struct v4l2_ctrl *ctrl = master->cluster[i];
+
+			if (ctrl == NULL)
+				continue;
+			ctrl->is_new = 0;
+			ctrl->request = get_request(ctrl, request);
+			if (ctrl->request == NULL)
+				continue;
+			found_request = true;
+			if (!ctrl->request->applied) {
+				request_to_new(master->cluster[i]);
+				apply_request = true;
+				ctrl->request->applied = 1;
+			}
+		}
+		if (ret) {
+			if (master->handler != hdl)
+				v4l2_ctrl_unlock(master);
+			break;
+		}
+
+		/*
+		 * Skip if it is a request that has already been applied.
+		 */
+		if (!apply_request)
+			goto unlock;
+
+		/* For volatile autoclusters that are currently in auto mode
+		   we need to discover if it will be set to manual mode.
+		   If so, then we have to copy the current volatile values
+		   first since those will become the new manual values (which
+		   may be overwritten by explicit new values from this set
+		   of controls). */
+		if (master->is_auto && master->has_volatiles &&
+						!is_cur_manual(master)) {
+			s32 new_auto_val = *master->p_new.p_s32;
+
+			/* If the new value == the manual value, then copy
+			   the current volatile values. */
+			if (new_auto_val == master->manual_mode_value)
+				update_from_auto_cluster(master);
+		}
+
+		try_or_set_cluster(NULL, master, 0, true, 0);
+
+unlock:
+		if (master->handler != hdl)
+			v4l2_ctrl_unlock(master);
+	}
+	mutex_unlock(hdl->lock);
+	return ret ? ret : (found_request ? 0 : -EINVAL);
+}
+EXPORT_SYMBOL(v4l2_ctrl_apply_request);
 
 void v4l2_ctrl_notify(struct v4l2_ctrl *ctrl, v4l2_ctrl_notify_fnc notify, void *priv)
 {
