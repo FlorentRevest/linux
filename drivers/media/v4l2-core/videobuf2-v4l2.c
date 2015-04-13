@@ -621,6 +621,27 @@ int vb2_qbuf(struct vb2_queue *q, struct v4l2_buffer *b)
 }
 EXPORT_SYMBOL_GPL(vb2_qbuf);
 
+int vb2_qbuf_request(struct vb2_queue *q, u16 request, struct vb2_buffer **p_buf)
+{
+	struct v4l2_buffer v4l2_buf;
+	int buffer;
+
+	for (buffer = 0; buffer < q->num_buffers; buffer++) {
+		struct vb2_buffer *vb = q->bufs[buffer];
+		struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+
+		if (vbuf->request == request &&
+		    vb->state == VB2_BUF_STATE_PREPARED) {
+			if (p_buf)
+				*p_buf = vb;
+			__fill_v4l2_buffer(vb, &v4l2_buf);
+			return vb2_qbuf(q, &v4l2_buf);
+		}
+	}
+	return -ENOENT;
+}
+EXPORT_SYMBOL_GPL(vb2_qbuf_request);
+
 static int vb2_internal_dqbuf(struct vb2_queue *q, struct v4l2_buffer *b,
 		bool nonblocking)
 {
