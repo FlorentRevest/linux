@@ -36,6 +36,8 @@ struct v4l2_subscribed_event;
 struct v4l2_fh;
 struct poll_table_struct;
 
+#define V4L2_CTRL_REQ_FL_KEEP (1UL << 31)
+
 /**
  * union v4l2_ctrl_ptr - A pointer to a control value.
  * @p_s32:	Pointer to a 32-bit signed value.
@@ -100,6 +102,7 @@ typedef void (*v4l2_ctrl_notify_fnc)(struct v4l2_ctrl *ctrl, void *priv);
 struct v4l2_ctrl_req {
 	struct list_head node;
 	u32 request;
+	unsigned keep:1;
 	unsigned applied:1;
 	union v4l2_ctrl_ptr ptr;
 };
