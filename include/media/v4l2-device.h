@@ -130,6 +130,9 @@ static inline void v4l2_subdev_notify(struct v4l2_subdev *sd,
 		sd->v4l2_dev->notify(sd, notification, arg);
 }
 
+/* For each registered video_device struct call vb2_qbuf_request(). */
+int v4l2_device_req_queue(struct v4l2_device *v4l2_dev, u16 request);
+
 /* Iterate over all subdevs. */
 #define v4l2_device_for_each_subdev(sd, v4l2_dev)			\
 	list_for_each_entry(sd, &(v4l2_dev)->subdevs, list)
