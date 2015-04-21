@@ -62,6 +62,8 @@ struct v4l2_device {
 	struct kref ref;
 	/* Release function that is called when the ref count goes to 0. */
 	void (*release)(struct v4l2_device *v4l2_dev);
+	/* Queue a request */
+	int (*req_queue)(struct v4l2_device *v4l2_dev, u16 request);
 };
 
 static inline void v4l2_device_get(struct v4l2_device *v4l2_dev)

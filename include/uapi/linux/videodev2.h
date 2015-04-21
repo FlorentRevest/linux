@@ -2194,6 +2194,7 @@ struct v4l2_create_buffers {
 #define V4L2_REQ_CMD_END	(1)
 #define V4L2_REQ_CMD_DELETE	(2)
 #define V4L2_REQ_CMD_APPLY	(3)
+#define V4L2_REQ_CMD_QUEUE	(4)
 
 struct v4l2_request_cmd {
 	__u32 cmd;
