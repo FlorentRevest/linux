@@ -212,6 +212,9 @@ struct v4l2_file_operations {
 
 struct video_device
 {
+	/* links into v4l2_device vdevs list */
+	struct list_head list;
+
 #if defined(CONFIG_MEDIA_CONTROLLER)
 	struct media_entity entity;
 	struct media_intf_devnode *intf_devnode;
