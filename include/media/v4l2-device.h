@@ -46,6 +46,8 @@ struct v4l2_device {
 #endif
 	/* used to keep track of the registered subdevs */
 	struct list_head subdevs;
+	/* used to keep track of the registered video_devices */
+	struct list_head vdevs;
 	/* lock this struct; can be used by the driver as well if this
 	   struct is embedded into a larger struct. */
 	spinlock_t lock;
