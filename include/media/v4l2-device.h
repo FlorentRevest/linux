@@ -35,6 +35,7 @@ struct v4l2_ctrl_handler;
  * @dev: pointer to struct device.
  * @mdev: pointer to struct media_device
  * @subdevs: used to keep track of the registered subdevs
+ * @vdevs: used to keep track of the registered video_devices
  * @lock: lock this struct; can be used by the driver as well
  *	if this struct is embedded into a larger struct.
  * @name: unique device name, by default the driver name + bus ID
@@ -63,6 +64,7 @@ struct v4l2_device {
 	struct media_device *mdev;
 #endif
 	struct list_head subdevs;
+	struct list_head vdevs;
 	spinlock_t lock;
 	char name[V4L2_DEVICE_NAME_SIZE];
 	void (*notify)(struct v4l2_subdev *sd,

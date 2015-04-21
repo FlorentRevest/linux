@@ -36,6 +36,7 @@ int v4l2_device_register(struct device *dev, struct v4l2_device *v4l2_dev)
 		return -EINVAL;
 
 	INIT_LIST_HEAD(&v4l2_dev->subdevs);
+	INIT_LIST_HEAD(&v4l2_dev->vdevs);
 	spin_lock_init(&v4l2_dev->lock);
 	v4l2_prio_init(&v4l2_dev->prio);
 	kref_init(&v4l2_dev->ref);
