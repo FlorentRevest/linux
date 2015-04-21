@@ -1,0 +1,233 @@
+Introduction
+============
+
+It is often useful to apply certain settings when a buffer is about to be
+filled by the DMA capture of a video capture device, ensuring that those
+settings are applied in time for them to be used with that buffer.
+
+One of the prime use-cases of this is Android's CameraHAL v3 which requires
+per-frame configuration support.
+
+But other use-cases are possible as well: changing codec settings (bit rate,
+etc.) starting with a specific buffer, preparing a configuration to be applied
+at a certain time, etc.
+
+The request API is the way V4L2 solved this problem.
+
+
+Basic Mechanism
+===============
+
+Requests are implemented by building on top of the control framework, adding
+new 'request' fields to various v4l2 structs and by adding a new ioctl:
+VIDIOC_REQUEST_CMD.
+
+The core are the additions to the control framework: normally when a control
+is set the control's value is applied immediately in the hardware. But the
+request API allows you to specify the control value for a specific request
+ID (from 1-0xffff). The control value is validated and stored for that request,
+but it won't be applied until later.
+
+Each control can support up to N requests where N is expected to be a multiple
+of VIDEO_MAX_FRAME. If N is 0, then it cannot be used with requests. Many
+controls (e.g. V4L2_CID_POWER_LINE_FREQUENCY) just make no sense in a request
+context.
+
+How many requests each control supports can be queried with VIDIOC_QUERY_EXT_CTRL
+and by checking the max_reqs field.
+
+Getting/setting/trying controls for a request can be done in two ways: one
+is to use the VIDIOC_REQUEST_CMD ioctl (more about that later), the other is
+to use VIDIOC_G/S/TRY_EXT/CTRLS and fill in a non-zero request ID. If the
+request ID is 0, then the normal behavior applies: so controls are set immediately.
+
+Request IDs are in the range of 1-65535. Applications can freely choose them,
+but controls won't support more than a fixed number of different requests.
+Requests can be deleted, see the section on VIDIOC_REQUEST_CMD.
+
+The expected usage is that request IDs are some base value + the buffer index.
+Request lookup is optimized for that scheme inside the control framework: there
+is a hash table of size VIDEO_MAX_FRAME, each element being a linked list.
+The hash function used is 'request % VIDEO_MAX_FRAME', and then the linked list
+is walked to find whether the request is in there. The expectation is that
+having more than VIDEO_MAX_FRAME requests will be very unusual, and certainly
+that the maximum number of possible requests in flight at the same time won't
+be more than a small multiple of VIDEO_MAX_FRAME.
+
+Associating a buffer with a specific request can be done by setting the new
+'request' field in struct v4l2_buffer to the request ID.
+
+Once a buffer is queued with a non-zero request ID, then it is up to the
+driver to apply the control values for that request at the right time ensuring
+that when the buffer is DMAed those values are in effect.
+
+This is entirely hardware specific, so it is the driver's responsibility. It
+will know the request ID of a buffer as soon as the vb2 buf_queue op is called.
+
+For simple cases a helper function v4l2_ctrl_apply_request() is available that
+will just apply any controls for the given request immediately. The driver can
+call that when the buffer is about to be filled. This is likely to be too crude
+for the more complex devices, in particular when dealing with settings that can
+take some time before that will take effect (e.g. focussing).
+
+
+Complex Devices
+===============
+
+For complex devices with lots of video and v4l-subdev device nodes you want to
+be able to synchronize buffers and controls for multiple nodes and apply them
+all as a single request.
+
+The way to do that is to:
+
+1) use the same request ID for all device nodes when setting controls for that
+   request.
+2) instead of using VIDIOC_QBUF use VIDIOC_PREPARE_BUF with the request field
+   set everywhere you need to have a buffer associated with the request.
+3) when all is done, call VIDIOC_REQUEST_CMD(V4L2_REQ_CMD_QUEUE) with the
+   request ID on any video or v4l-subdev node.
+
+The V4L2_REQ_CMD_QUEUE command will call a top-level 'req_queue' callback in
+the driver, at which point it is the responsibility of the driver to pull
+everything together and ensure that all prepared buffers are queued up at the
+right time to the DMA queues and all controls for that request will be applied
+at the right moment.
+
+Two helper functions were created to aid with with: vb2_qbuf_request() will
+queue up a prepared buffer with the given request ID. And v4l2_device_req_queue()
+will walk all video_device structs and do just that for each of them. The last
+function only works for simple devices, complex devices will almost certainly
+need to create their own function.
+
+
+Feedback
+========
+
+After a buffer is dequeued you can get the control values that were actually
+used when filling in that buffer by calling VIDIOC_G_EXT_CTRLS with the request
+field set to buffer->request. This can also be used to obtain additional meta
+information by creating read-only controls that are filled in by the driver
+for that specific buffer.
+
+Currently there is no event that is triggered when someone sets a new control
+value for a specific request. This can be added, but I suspect it will make
+more sense to have driver-specific events (e.g. 'EVENT_METADATA_AVAILABLE')
+that applications can use.
+
+A new control flag was added: V4L2_CTRL_FLAG_REQ_APPLIED. If set, then the
+control value for the request was applied.
+
+Note: once the control value for a request has been applied it will never be
+applied again. Only after it has been set again (using VIDIOC_S_EXT_CTRLS)
+will the control value for that request be applied.
+
+Using VIDIOC_REQUEST_CMD it is possible to keep applied values and reapply
+them, but that is not the standard behavior and is experimental since it
+is not clear whether this is actually needed (or even wanted).
+
+
+VIDIOC_REQUEST_CMD
+==================
+
+#define V4L2_REQ_CMD_BEGIN      (0)
+#define V4L2_REQ_CMD_END        (1)
+#define V4L2_REQ_CMD_DELETE     (2)
+#define V4L2_REQ_CMD_APPLY      (3)
+#define V4L2_REQ_CMD_QUEUE      (4)
+
+/* Flag for V4L2_REQ_CMD_BEGIN */
+#define V4L2_REQ_CMD_BEGIN_FL_KEEP      (1 << 0)
+
+struct v4l2_request_cmd {
+        __u32 cmd;
+        __u16 request;
+        __u16 flags;
+        union {
+                struct {
+                        __u32 data[8];
+                } raw;
+        };
+};
+
+The VIDIOC_REQUEST_CMD ioctl is used for a variety of request-related
+purposes. These will be explained in more detail below.
+
+V4L2_REQ_CMD_BEGIN/END
+----------------------
+
+While it is easy to use VIDIOC_S_EXT_CTRLS to set control values for a specific
+request, you cannot do that with VIDIOC_S_CTRL since there is no request field
+in the v4l2_control struct. And in fact it is desirable to be able to use other
+ioctls with requests as well (e.g. VIDIOC_S_SELECTION).
+
+In order to allow other ioctls to be used as part of a request you can use the
+BEGIN/END commands to bracket a bunch of other ioctls, all of which (where
+appropriate) will be stored as part of the request.
+
+Currently this is only implemented for the control ioctls. But VIDIOC_S_SELECTION
+is a prime candidate for the future. Internally however, the selection data
+would have to be stored as a control since all request data are always controls.
+
+Whether ioctls apply to a request is per-filehandle: calling VIDIOC_REQUEST_CMD
+with V4L2_REQ_CMD_BEGIN will mark the filehandle that future ioctls need to be
+applied to the specified request. V4L2_REQ_CMD_END will 'unmark' the filehandle
+and everything will be back to normal.
+
+Calling V4L2_REQ_CMD_BEGIN with the V4L2_REQ_CMD_BEGIN_FL_KEEP flag will prevent
+request control values to be discarded after they are applied. Instead they will
+be kept and re-applied the next time controls for that request need to be set.
+
+V4L2_REQ_CMD_DELETE
+-------------------
+
+Delete all control values for the given request (if non-zero) or delete all
+control request values for all requests (if zero).
+
+This is recommended at the beginning of the application to discard any old
+request control values from the driver.
+
+V4L2_REQ_CMD_APPLY
+------------------
+
+Explicitly apply the control values for the given request. This takes effect
+immediately.
+
+V4L2_REQ_CMD_QUEUE
+------------------
+
+Queue all buffers for the given request for all device nodes. This may not be
+supported by the driver. Test this by calling it with request 0: if ENOSYS is
+returned, then this functionality is not supported.
+
+
+Miscellaneous
+=============
+
+The vivid driver has support for all this: the brightness, contrast, saturation
+and hue controls all support up to VIDEO_MAX_FRAME requests.
+
+Git tree for these patches:
+
+http://git.linuxtv.org/cgit.cgi/hverkuil/media_tree.git/log/?h=requests
+
+Utilities with support for requests are available here:
+
+http://git.linuxtv.org/cgit.cgi/hverkuil/v4l-utils.git/log/?h=requests
+
+Remaining questions:
+
+- Should we keep the V4L2_REQ_CMD_BEGIN_FL_KEEP flag?
+- Do we need request-related events? And if so, which events are needed?
+- Anything missing?
+
+Known TODOs:
+
+- DocBook patches: have to wait until this is ready to be merged, which will
+  require an actual driver that wants to use it.
+- Almost certainly: add support for VIDIOC_G/S_SELECTION and requests. An
+  older version of this work exists, but it needs to be reworked quite a
+  bit. Contact me if this is needed.
+
+In case of questions contact me:
+
+Hans Verkuil <hverkuil@xs4all.nl>
