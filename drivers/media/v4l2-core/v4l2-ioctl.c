@@ -2124,8 +2124,11 @@ static int v4l_s_ext_ctrls(const struct v4l2_ioctl_ops *ops,
 
 	p->error_idx = p->count;
 	if (vfh && vfh->ctrl_handler) {
-		if (vfh->request && p->request == 0)
+		if (vfh->request && p->request == 0) {
 			p->request = vfh->request;
+			if (vfh->flags & V4L2_FH_FL_KEEP)
+				p->request |= V4L2_CTRL_REQ_FL_KEEP;
+		}
 		return v4l2_s_ext_ctrls(vfh, vfh->ctrl_handler, p);
 	}
 	if (vfd->ctrl_handler)
@@ -2295,6 +2298,10 @@ static int v4l_request_cmd(const struct v4l2_ioctl_ops *ops,
 		if (p->request == 0)
 			return -EINVAL;
 		vfh->request = p->request;
+		if (p->flags & V4L2_REQ_CMD_BEGIN_FL_KEEP)
+			vfh->flags |= V4L2_FH_FL_KEEP;
+		else
+			vfh->flags &= ~V4L2_FH_FL_KEEP;
 		break;
 	case V4L2_REQ_CMD_END:
 		vfh->request = 0;

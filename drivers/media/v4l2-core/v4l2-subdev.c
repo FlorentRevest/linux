@@ -214,14 +214,19 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 		if (vfh->request && p->request == 0)
 			p->request = vfh->request;
+		else if (p->request > USHRT_MAX)
+			return -EINVAL;
 		return v4l2_g_ext_ctrls(vfh->ctrl_handler, arg);
 	}
 
 	case VIDIOC_S_EXT_CTRLS: {
 		struct v4l2_ext_controls *p = arg;
 
-		if (vfh->request && p->request == 0)
+		if (vfh->request && p->request == 0) {
 			p->request = vfh->request;
+			if (vfh->flags & V4L2_FH_FL_KEEP)
+				p->request |= V4L2_CTRL_REQ_FL_KEEP;
+		}
 		return v4l2_s_ext_ctrls(vfh, vfh->ctrl_handler, arg);
 	}
 
@@ -258,6 +263,10 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 			if (p->request == 0)
 				return -EINVAL;
 			vfh->request = p->request;
+			if (p->flags & V4L2_REQ_CMD_BEGIN_FL_KEEP)
+				vfh->flags |= V4L2_FH_FL_KEEP;
+			else
+				vfh->flags &= ~V4L2_FH_FL_KEEP;
 			break;
 		case V4L2_REQ_CMD_END:
 			vfh->request = 0;

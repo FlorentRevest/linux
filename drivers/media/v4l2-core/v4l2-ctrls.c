@@ -2694,6 +2694,8 @@ int v4l2_query_ext_ctrl(struct v4l2_ctrl_handler *hdl, struct v4l2_query_ext_ctr
 	if (req) {
 		if (ctrl_req->applied)
 			qc->flags |= V4L2_CTRL_FLAG_REQ_APPLIED;
+		if (ctrl_req->keep)
+			qc->flags |= V4L2_CTRL_FLAG_REQ_KEEP;
 	}
 	qc->max_reqs = ctrl->max_reqs;
 	qc->type = ctrl->type;
@@ -3129,7 +3131,7 @@ EXPORT_SYMBOL(v4l2_ctrl_g_ctrl_int64);
    copied to the current value on a set.
    Must be called with ctrl->handler->lock held. */
 static int try_or_set_cluster(struct v4l2_fh *fh, struct v4l2_ctrl *master,
-			      u16 request, bool set, u32 ch_flags)
+			      u16 request, bool keep, bool set, u32 ch_flags)
 {
 	bool update_flag;
 	int ret;
@@ -3153,6 +3155,8 @@ static int try_or_set_cluster(struct v4l2_fh *fh, struct v4l2_ctrl *master,
 				if (ret)
 					return ret;
 			}
+			if (set)
+				req->keep = keep;
 		}
 		ctrl->request = req;
 		if (!ctrl->is_new) {
@@ -3253,6 +3257,7 @@ static int try_set_ext_ctrls(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
 	struct v4l2_ctrl_helper helper[4];
 	struct v4l2_ctrl_helper *helpers = helper;
 	unsigned request = 0;
+	bool keep = false;
 	unsigned i, j;
 	int ret;
 
@@ -3262,10 +3267,12 @@ static int try_set_ext_ctrls(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
 	if (cs->which == V4L2_CTRL_WHICH_DEF_VAL)
 		return -EINVAL;
 
-	if (V4L2_CTRL_ID2WHICH(cs->which))
+	if (V4L2_CTRL_ID2WHICH(cs->which)) {
 		cs->which = V4L2_CTRL_ID2WHICH(cs->which);
-	else
+	} else {
 		request = cs->request;
+		keep = set && (cs->request & V4L2_CTRL_REQ_FL_KEEP);
+	}
 
 	if (hdl == NULL || request > USHRT_MAX)
 		return -EINVAL;
@@ -3337,7 +3344,8 @@ static int try_set_ext_ctrls(struct v4l2_fh *fh, struct v4l2_ctrl_handler *hdl,
 		} while (!ret && idx);
 
 		if (!ret)
-			ret = try_or_set_cluster(fh, master, request, set, 0);
+			ret = try_or_set_cluster(fh, master, request,
+						 keep, set, 0);
 
 		/* Copy the new values back to userspace. */
 		if (!ret) {
@@ -3397,7 +3405,7 @@ static int set_ctrl(struct v4l2_fh *fh, unsigned request,
 		update_from_auto_cluster(master);
 
 	ctrl->is_new = 1;
-	return try_or_set_cluster(fh, master, request, true, ch_flags);
+	return try_or_set_cluster(fh, master, request, false, true, ch_flags);
 }
 
 /* Helper function for VIDIOC_S_CTRL compatibility */
@@ -3485,6 +3493,7 @@ int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request)
 	list_for_each_entry(ref, &hdl->ctrl_refs, node) {
 		struct v4l2_ctrl *master;
 		bool apply_request = false;
+		bool keep = false;
 
 		if (ref->ctrl->max_reqs == 0)
 			continue;
@@ -3503,9 +3512,11 @@ int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request)
 			if (ctrl->request == NULL)
 				continue;
 			found_request = true;
-			if (!ctrl->request->applied) {
+			if (ctrl->request->keep || !ctrl->request->applied) {
 				request_to_new(master->cluster[i]);
 				apply_request = true;
+				if (ctrl->request->keep)
+					keep = true;
 				ctrl->request->applied = 1;
 			}
 		}
@@ -3516,7 +3527,8 @@ int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request)
 		}
 
 		/*
-		 * Skip if it is a request that has already been applied.
+		 * Skip if it is a one-off request that has already been
+		 * applied.
 		 */
 		if (!apply_request)
 			goto unlock;
@@ -3537,7 +3549,7 @@ int v4l2_ctrl_apply_request(struct v4l2_ctrl_handler *hdl, unsigned request)
 				update_from_auto_cluster(master);
 		}
 
-		try_or_set_cluster(NULL, master, 0, true, 0);
+		try_or_set_cluster(NULL, master, 0, keep, true, 0);
 
 unlock:
 		if (master->handler != hdl)
