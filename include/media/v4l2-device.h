@@ -71,6 +71,8 @@ struct v4l2_device {
 	struct v4l2_prio_state prio;
 	struct kref ref;
 	void (*release)(struct v4l2_device *v4l2_dev);
+	/* Queue a request */
+	int (*req_queue)(struct v4l2_device *v4l2_dev, u16 request);
 };
 
 /**

@@ -2303,6 +2303,17 @@ static int v4l_request_cmd(const struct v4l2_ioctl_ops *ops,
 		return v4l2_ctrl_delete_request(vfh->ctrl_handler, p->request);
 	case V4L2_REQ_CMD_APPLY:
 		return v4l2_ctrl_apply_request(vfh->ctrl_handler, p->request);
+	case V4L2_REQ_CMD_QUEUE:
+		if (vfd->v4l2_dev->req_queue == NULL)
+			return -ENOSYS;
+		if (p->request == 0)
+			return -EINVAL;
+		if (vfd->lock)
+			mutex_unlock(vfd->lock);
+		ret = vfd->v4l2_dev->req_queue(vfd->v4l2_dev, p->request);
+		if (vfd->lock)
+			mutex_lock(vfd->lock);
+		return ret;
 	default:
 		return -EINVAL;
 	}

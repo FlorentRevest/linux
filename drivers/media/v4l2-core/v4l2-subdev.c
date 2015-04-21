@@ -268,6 +268,12 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 		case V4L2_REQ_CMD_APPLY:
 			return v4l2_ctrl_apply_request(vfh->ctrl_handler,
 						       p->request);
+		case V4L2_REQ_CMD_QUEUE:
+			if (sd->v4l2_dev->req_queue == NULL)
+				return -ENOSYS;
+			if (p->request == 0)
+				return -EINVAL;
+			return sd->v4l2_dev->req_queue(sd->v4l2_dev, p->request);
 		default:
 			return -EINVAL;
 		}
