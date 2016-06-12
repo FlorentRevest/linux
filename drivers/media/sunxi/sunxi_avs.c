@@ -43,8 +43,14 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include <asm/dma.h>
-#include <mach/hardware.h>
-#include <asm/system.h>
+#include <asm/sizes.h>
+#include <asm/barrier.h>
+#include <asm/compiler.h>
+#include <asm/cmpxchg.h>
+#include <asm/exec.h>
+#include <asm/switch_to.h>
+#include <asm/system_info.h>
+#include <asm/system_misc.h>
 #include <linux/rmap.h>
 #include <linux/wait.h>
 #include <linux/poll.h>

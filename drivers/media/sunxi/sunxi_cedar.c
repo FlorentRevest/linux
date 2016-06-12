@@ -39,13 +39,46 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include <asm/dma.h>
-#include <mach/hardware.h>
-#include <asm/system.h>
+#include <asm/sizes.h>
+#include <asm/barrier.h>
+#include <asm/compiler.h>
+#include <asm/cmpxchg.h>
+#include <asm/exec.h>
+#include <asm/switch_to.h>
+#include <asm/system_info.h>
+#include <asm/system_misc.h>
 #include <asm/siginfo.h>
 #include <asm/signal.h>
-#include <mach/system.h>
-#include <mach/clock.h>
+#include <asm/proc-fns.h>
+#include <linux/kernel.h>
+#include <linux/clocksource.h>
+#include "aw_ccu.h"
 #include "sunxi_cedar.h"
+
+typedef struct clk
+{
+    __aw_ccu_clk_t  *clk;       /* clock handle from ccu csp                            */
+    __s32           usr_cnt;    /* user count                                           */
+    __s32           enable;     /* enable count, when it down to 0, it will be disalbe  */
+    __s32           hash;       /* hash value, for fast search without string compare   */
+
+    __aw_ccu_clk_t  *(*get_clk)(__s32 id);
+                                /* set clock                                            */
+    __aw_ccu_err_e  (*set_clk)(__aw_ccu_clk_t *clk);
+                                /* get clock                                            */
+    struct clk      *parent;    /* parent clock node pointer                            */
+    struct clk      *child;     /* child clock node pinter                              */
+    struct clk      *left;      /* left brother node pointer                            */
+    struct clk      *right;     /* right bother node pointer                            */
+
+} __ccu_clk_t;
+
+static inline const char *clk_name(struct clk *clk)
+{
+	return clk->clk->name;
+}
+
+extern int clk_reset(struct clk *clk, int reset);
 
 #define DRV_VERSION "0.01alpha"
 
