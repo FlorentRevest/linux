@@ -15,6 +15,17 @@ if MEDIA_SUPPORT
 
 comment "Multimedia core support"
 
+config VIDEO_SUNXI_CEDAR
+       tristate "CEDAR driver for sunxi"
+       depends on ARCH_SUNXI
+       default m
+       help
+         CEDAR driver for sunxi
+
+if VIDEO_SUNXI_CEDAR
+source "drivers/media/sunxi/Kconfig"
+endif
+
 #
 # Multimedia support - automatically enable V4L2 and DVB core
 #
