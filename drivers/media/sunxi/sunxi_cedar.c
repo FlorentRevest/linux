@@ -101,6 +101,9 @@ int g_dev_minor = CEDARDEV_MINOR;
 module_param(g_dev_major, int, S_IRUGO);//S_IRUGO represent that g_dev_major can be read,but canot be write
 module_param(g_dev_minor, int, S_IRUGO);
 
+// TODO: SUN7I: 32 else 0
+#define SW_INT_START		0
+#define SW_INT_IRQNO_VE			(53 + SW_INT_START)
 #define VE_IRQ_NO (SW_INT_IRQNO_VE)
 
 struct clk *ve_moduleclk = NULL;
@@ -191,11 +194,11 @@ static irqreturn_t VideoEngineInterupt(int irq, void *dev)
 
     //disable interrupt
     if(modual_sel == 0) {
-        val = readl(ve_int_ctrl_reg);
-        writel(val & (~0x7c), ve_int_ctrl_reg);
+        val = readl((const volatile void *)ve_int_ctrl_reg);
+        writel(val & (~0x7c), (volatile void *)ve_int_ctrl_reg);
     } else {
-        val = readl(ve_int_ctrl_reg);
-        writel(val & (~0xf), ve_int_ctrl_reg);
+        val = readl((const volatile void *)ve_int_ctrl_reg);
+        writel(val & (~0xf), (volatile void *)ve_int_ctrl_reg);
     }
 
     cedar_devp->irq_value = 1;	//hx modify 2011-8-1 16:08:47
@@ -451,14 +454,14 @@ static void save_context(void)
 {
 	if (SUNXI_VER_A10A == sw_get_ic_ver() ||
 	    SUNXI_VER_A13A == sw_get_ic_ver())
-		g_ctx_reg0 = readl(0xf1c20e00);
+		g_ctx_reg0 = readl((const volatile void *)0xf1c20e00);
 }
 
 static void restore_context(void)
 {
 	if (SUNXI_VER_A10A == sw_get_ic_ver() ||
 	    SUNXI_VER_A13A == sw_get_ic_ver())
-		writel(g_ctx_reg0, 0xf1c20e00);
+		writel(g_ctx_reg0, (volatile void *)0xf1c20e00);
 }
 
 static long __set_ve_freq (int arg)
@@ -803,7 +806,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		struct cedarv_regop reg_para;
 		if(copy_from_user(&reg_para, (void __user*)arg, sizeof(struct cedarv_regop)))
 			return -EFAULT;
-		return readl(reg_para.addr);
+		return readl((const volatile void *)reg_para.addr);
 	}
 
 	case IOCTL_WRITE_REG:
@@ -811,7 +814,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		struct cedarv_regop reg_para;
 		if(copy_from_user(&reg_para, (void __user*)arg, sizeof(struct cedarv_regop)))
 			return -EFAULT;
-		writel(reg_para.value, reg_para.addr);
+		writel(reg_para.value, (volatile void *)reg_para.addr);
 		break;
 	}
 
@@ -953,6 +956,8 @@ static struct platform_driver sw_cedar_driver = {
 	},
 };
 
+#define SW_PA_SDRAM_START                 0x40000000
+
 static int __init cedardev_init(void)
 {
 	int ret = 0;
@@ -1033,13 +1038,13 @@ static int __init cedardev_init(void)
     cedar_devp->iomap_addrs.regs_avs = ioremap(AVS_REGS_BASE, 1024);
 
 	//VE_SRAM mapping to AC320
-	val = readl(0xf1c00000);
+	val = readl((const volatile void *)0xf1c00000);
 	val &= 0x80000000;
-	writel(val,0xf1c00000);
+	writel(val,(volatile void *)0xf1c00000);
 	//remapping SRAM to MACC for codec test
-	val = readl(0xf1c00000);
+	val = readl((const volatile void *)0xf1c00000);
 	val |= 0x7fffffff;
-	writel(val,0xf1c00000);
+	writel(val,(volatile void *)0xf1c00000);
 
 	ve_pll4clk = clk_get(NULL,"ve_pll");
 	pll4clk_rate = clk_get_rate(ve_pll4clk);
