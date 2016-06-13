@@ -55,6 +55,65 @@
 #include "aw_ccu.h"
 #include "sunxi_cedar.h"
 
+// TODO: this should be replaced by usage of device tree!
+enum {
+	SUNXI_BIT_SUN4I = BIT(30),
+	SUNXI_BIT_SUN5I = BIT(29),
+	SUNXI_BIT_SUN6I = BIT(28),
+	SUNXI_BIT_SUN7I = BIT(27),
+
+	/* SUNXI_BIT_UNKNOWN can't OR anything known */
+	SUNXI_BIT_UNKNOWN = BIT(20),
+
+	/* sun4i */
+	SUNXI_SOC_A10  = SUNXI_BIT_SUN4I | BIT(4),
+
+	/* sun5i */
+	SUNXI_SOC_A13  = SUNXI_BIT_SUN5I | BIT(4),
+	SUNXI_SOC_A12  = SUNXI_BIT_SUN5I | BIT(5),
+	SUNXI_SOC_A10S = SUNXI_BIT_SUN5I | BIT(6),
+
+	/* sun6i */
+	SUNXI_SOC_A31  = SUNXI_BIT_SUN6I | BIT(4),
+
+	/* sun7i */
+	SUNXI_SOC_A20  = SUNXI_BIT_SUN7I | BIT(4),
+
+	SUNXI_REV_UNKNOWN = 0,
+	SUNXI_REV_A,
+	SUNXI_REV_B,
+	SUNXI_REV_C,
+};
+
+enum sw_ic_ver {
+	SUNXI_VER_UNKNOWN = SUNXI_BIT_UNKNOWN,
+
+	/* sun4i */
+	SUNXI_VER_A10A = SUNXI_SOC_A10 + SUNXI_REV_A,
+	SUNXI_VER_A10B,
+	SUNXI_VER_A10C,
+
+	/* sun5i */
+	SUNXI_VER_A13 = SUNXI_SOC_A13,
+	SUNXI_VER_A13A,
+	SUNXI_VER_A13B,
+	SUNXI_VER_A12 = SUNXI_SOC_A12,
+	SUNXI_VER_A12A,
+	SUNXI_VER_A12B,
+	SUNXI_VER_A10S = SUNXI_SOC_A10S,
+	SUNXI_VER_A10SA,
+	SUNXI_VER_A10SB,
+
+	/* sun6i */
+	SUNXI_VER_A31 = SUNXI_SOC_A31,
+
+	/* sun7i */
+	SUNXI_VER_A20 = SUNXI_SOC_A20,
+};
+
+enum sw_ic_ver sw_get_ic_ver = SUNXI_VER_A13; // TODO: A13A, A13B ???
+
+// TODO: this should be replaced by a better clock handling
 typedef struct clk
 {
     __aw_ccu_clk_t  *clk;       /* clock handle from ccu csp                            */
@@ -452,15 +511,15 @@ static void cedar_engine_for_events(unsigned long arg)
 static unsigned int g_ctx_reg0;
 static void save_context(void)
 {
-	if (SUNXI_VER_A10A == sw_get_ic_ver() ||
-	    SUNXI_VER_A13A == sw_get_ic_ver())
+	if (SUNXI_VER_A10A == sw_get_ic_ver ||
+	    SUNXI_VER_A13A == sw_get_ic_ver)
 		g_ctx_reg0 = readl((const volatile void *)0xf1c20e00);
 }
 
 static void restore_context(void)
 {
-	if (SUNXI_VER_A10A == sw_get_ic_ver() ||
-	    SUNXI_VER_A13A == sw_get_ic_ver())
+	if (SUNXI_VER_A10A == sw_get_ic_ver ||
+	    SUNXI_VER_A13A == sw_get_ic_ver)
 		writel(g_ctx_reg0, (volatile void *)0xf1c20e00);
 }
 
@@ -773,13 +832,13 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         break;
         case IOCTL_GET_IC_VER:
         {
-		if (SUNXI_VER_A10A == sw_get_ic_ver() ||
-		    SUNXI_VER_A13A == sw_get_ic_ver()) {
+		if (SUNXI_VER_A10A == sw_get_ic_ver ||
+		    SUNXI_VER_A13A == sw_get_ic_ver) {
         		return 0x0A10000A;
-		} else if (SUNXI_VER_A10B == sw_get_ic_ver() ||
-			   SUNXI_VER_A10C == sw_get_ic_ver() ||
-			   SUNXI_VER_A13B == sw_get_ic_ver() ||
-			   SUNXI_VER_A20 == sw_get_ic_ver()) {
+		} else if (SUNXI_VER_A10B == sw_get_ic_ver ||
+			   SUNXI_VER_A10C == sw_get_ic_ver ||
+			   SUNXI_VER_A13B == sw_get_ic_ver ||
+			   SUNXI_VER_A20 == sw_get_ic_ver) {
         		return 0x0A10000B;
         	}else{
         		printk("IC_VER get error:%s,%d\n", __func__, __LINE__);
@@ -1057,7 +1116,7 @@ static int __init cedardev_init(void)
 		printk("set parent of ve_moduleclk to ve_pll4clk failed!\n");
 		return -EFAULT;
 	}
-	if (SUNXI_VER_A20 == sw_get_ic_ver())
+	if (SUNXI_VER_A20 == sw_get_ic_ver)
 		/* default the ve freq to 300M for A20 (from sun7i_cedar.c) */
 		__set_ve_freq(300);
 	else
