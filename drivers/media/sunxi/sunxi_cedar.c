@@ -886,7 +886,8 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
 
     if (io_ram == 0) {
         /* Set reserved and I/O flag for the area. */
-        vma->vm_flags |= VM_RESERVED | VM_IO;
+        // TODO: Here there was VM_RESERVED https://git.kernel.org/cgit/linux/kernel/git/stable/linux-stable.git/commit/?id=314e51b9851b but it was removed for VM_IO, is it ok ?
+        vma->vm_flags |= VM_IO;
 
         /* Select uncached access. */
         //vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
@@ -897,7 +898,8 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
         }
     } else {
         /* Set reserved and I/O flag for the area. */
-        vma->vm_flags |= VM_RESERVED | VM_IO;
+        // TODO: Here there was VM_RESERVED https://git.kernel.org/cgit/linux/kernel/git/stable/linux-stable.git/commit/?id=314e51b9851b but it was removed for VM_IO, is it ok ?
+        vma->vm_flags |= VM_IO;
         /* Select uncached access. */
         vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
