@@ -67,6 +67,24 @@
 		};
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		ve_reserved: cma {
+			compatible = "shared-dma-pool";
+			reg = <0x7800000 0x9000000>;
+			no-map;
+			linux,cma-default;
+		};
+	};
+
+	video-engine {
+		compatible = "allwinner,sun5i-a13-video-engine";
+        memory-region = <&ve_reserved>;
+	};
+
 	thermal-zones {
 		cpu_thermal {
 			/* milliseconds */

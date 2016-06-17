@@ -54,6 +54,8 @@
 #include <linux/clocksource.h>
 #include "aw_ccu.h"
 #include "sunxi_cedar.h"
+#include <linux/of_reserved_mem.h>
+#include <linux/of_platform.h>
 
 // TODO: this should be replaced by usage of device tree!
 enum {
@@ -137,7 +139,8 @@ static inline const char *clk_name(struct clk *clk)
 	return clk->clk->name;
 }
 
-extern int clk_reset(struct clk *clk, int reset);
+// TODO: replace
+//extern int clk_reset(struct clk *clk, int reset);
 
 #define DRV_VERSION "0.01alpha"
 
@@ -150,7 +153,7 @@ extern int clk_reset(struct clk *clk, int reset);
 #define CEDARDEV_MINOR (0)
 #endif
 
-//#define CEDAR_DEBUG
+#define CEDAR_DEBUG
 
 #define CONFIG_SW_SYSMEM_RESERVED_BASE 0x43000000
 #define CONFIG_SW_SYSMEM_RESERVED_SIZE 75776
@@ -177,8 +180,8 @@ static unsigned long pll4clk_rate = 720000000;
 #ifdef CONFIG_CMA
 static void *ve_start_virt;
 #endif
-extern unsigned long ve_start;
-extern unsigned long ve_size;
+unsigned long ve_start;
+unsigned long ve_size;
 extern int flush_clean_user_range(long start, long end);
 struct iomap_para{
 	volatile char* regs_macc;
@@ -717,8 +720,9 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		case IOCTL_RESET_VE:
             clk_disable(dram_veclk);
-            clk_reset(ve_moduleclk, 1);
-            clk_reset(ve_moduleclk, 0);
+            // TODO: what the heck
+            //clk_reset(ve_moduleclk, 1);
+            //clk_reset(ve_moduleclk, 0);
             clk_enable(dram_veclk);
 		break;
 
@@ -1019,19 +1023,47 @@ static struct platform_driver sw_cedar_driver = {
 
 #define SW_PA_SDRAM_START                 0x40000000
 
+static const struct of_device_id sun4i_drv_of_table[] = {
+	{ .compatible = "allwinner,sun5i-a13-video-engine" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, sun4i_drv_of_table);
+
 static int __init cedardev_init(void)
 {
 	int ret = 0;
 	int err = 0;
 	int devno;
 	unsigned int val;
-	dev_t dev = 0;
+    dev_t dev = 0;
+	struct platform_device *pdev = NULL;
+    struct device_node *dt_node;
+	resource_size_t pa;
+
+    dt_node = of_find_node_by_path("/video-engine");
+
+    if (!dt_node) {
+        printk(KERN_ERR "(E) Failed to find device-tree node\n");
+        return -ENODEV;
+    }
+
+    pdev = of_find_device_by_node(dt_node);
+
+    if (!pdev) {
+        printk(KERN_ERR "(E) Failed to find device-tree dev\n");
+        return -ENODEV;
+    }
+
+	ret = of_reserved_mem_device_init(&pdev->dev);
+	if (ret) {
+        printk(KERN_ERR "(E) Failed to reserve mem\n");
+		return -ENODEV;
+    }
 
 #ifdef CONFIG_CMA
 	/* If having CMA enabled, just rely on CMA for memory allocation */
-	resource_size_t pa;
 	ve_size = 80 * SZ_1M;
-	ve_start_virt = dma_alloc_coherent(NULL, ve_size, &pa,
+	ve_start_virt = dma_alloc_coherent(&pdev->dev, ve_size, &pa,
 							GFP_KERNEL | GFP_DMA);
 	if (!ve_start_virt) {
 		printk(KERN_NOTICE "cedar: failed to allocate memory buffer\n");
@@ -1040,7 +1072,7 @@ static int __init cedardev_init(void)
 	ve_start = pa;
 	if (ve_start + ve_size > SW_PA_SDRAM_START + SZ_256M) {
 		printk(KERN_NOTICE "cedar: buffer is above 256MB limit\n");
-		dma_free_coherent(NULL, ve_size, ve_start_virt, ve_start);
+		dma_free_coherent(&pdev->dev, ve_size, ve_start_virt, ve_start);
 		ve_start_virt = 0;
 		ve_size = 0;
 		return -ENODEV;
@@ -1099,8 +1131,10 @@ static int __init cedardev_init(void)
     cedar_devp->iomap_addrs.regs_avs = ioremap(AVS_REGS_BASE, 1024);
 
 	//VE_SRAM mapping to AC320
+	printk(KERN_NOTICE "readl\n");
 	val = readl((const volatile void *)0xf1c00000);
 	val &= 0x80000000;
+	printk(KERN_NOTICE "writel\n");
 	writel(val,(volatile void *)0xf1c00000);
 	//remapping SRAM to MACC for codec test
 	val = readl((const volatile void *)0xf1c00000);
@@ -1163,6 +1197,23 @@ module_init(cedardev_init);
 static void __exit cedardev_exit(void)
 {
 	dev_t dev;
+	struct platform_device *pdev = NULL;
+    struct device_node *dt_node;
+
+    dt_node = of_find_node_by_path("/video-engine");
+
+    if (!dt_node) {
+        printk(KERN_ERR "(E) Failed to find device-tree node\n");
+        return;
+    }
+
+    pdev = of_find_device_by_node(dt_node);
+
+    if (!pdev) {
+        printk(KERN_ERR "(E) Failed to find device-tree dev\n");
+        return;
+    }
+
 	dev = MKDEV(g_dev_major, g_dev_minor);
 
     free_irq(VE_IRQ_NO, NULL);
@@ -1199,11 +1250,12 @@ static void __exit cedardev_exit(void)
 
 #ifdef CONFIG_CMA
 	if (ve_start_virt) {
-		dma_free_coherent(NULL, ve_size, ve_start_virt, ve_start);
+		dma_free_coherent(&pdev->dev, ve_size, ve_start_virt, ve_start);
 		ve_start_virt = 0;
 		ve_size = 0;
 	}
 #endif
+	of_reserved_mem_device_release(&pdev->dev);
 }
 module_exit(cedardev_exit);
 
