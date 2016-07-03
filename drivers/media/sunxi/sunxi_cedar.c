@@ -1130,17 +1130,18 @@ static int __init cedardev_init(void)
     }
     cedar_devp->iomap_addrs.regs_avs = ioremap(AVS_REGS_BASE, 1024);
 
+    // TODO: is it really needed ????
 	//VE_SRAM mapping to AC320
-	printk(KERN_NOTICE "readl\n");
-	val = readl((const volatile void *)0xf1c00000);
-	val &= 0x80000000;
-	printk(KERN_NOTICE "writel\n");
-	writel(val,(volatile void *)0xf1c00000);
+	//val = readl((const volatile void *)0xf1c00000);
+	//val &= 0x80000000;
+	//printk(KERN_NOTICE "writel\n");
+	//writel(val,(volatile void *)0xf1c00000);
 	//remapping SRAM to MACC for codec test
-	val = readl((const volatile void *)0xf1c00000);
-	val |= 0x7fffffff;
-	writel(val,(volatile void *)0xf1c00000);
+	//val = readl((const volatile void *)0xf1c00000);
+	//val |= 0x7fffffff;
+	//writel(val,(volatile void *)0xf1c00000);
 
+	printk(KERN_NOTICE "clock\n");
 	ve_pll4clk = clk_get(NULL,"ve_pll");
 	pll4clk_rate = clk_get_rate(ve_pll4clk);
 	/* getting ahb clk for ve!(macc) */
