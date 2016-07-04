@@ -56,6 +56,7 @@
 #include "sunxi_cedar.h"
 #include <linux/of_reserved_mem.h>
 #include <linux/of_platform.h>
+#include <linux/of_irq.h>
 
 // TODO: this should be replaced by usage of device tree!
 enum {
@@ -173,7 +174,7 @@ struct clk *ve_pll4clk = NULL;
 struct clk *ahb_veclk = NULL;
 struct clk *dram_veclk = NULL;
 struct clk *avs_moduleclk = NULL;
-struct clk *hosc_clk = NULL;
+// struct clk *hosc_clk = NULL; NOT NEEDED -> just used for clk_set_parent
 
 static unsigned long pll4clk_rate = 720000000;
 
@@ -1034,13 +1035,12 @@ static int __init cedardev_init(void)
 	int ret = 0;
 	int err = 0;
 	int devno;
-	unsigned int val;
     dev_t dev = 0;
 	struct platform_device *pdev = NULL;
     struct device_node *dt_node;
 	resource_size_t pa;
 
-    dt_node = of_find_node_by_path("/video-engine");
+    dt_node = of_find_node_by_path("/soc@01c00000/video-engine");
 
     if (!dt_node) {
         printk(KERN_ERR "(E) Failed to find device-tree node\n");
@@ -1118,7 +1118,7 @@ static int __init cedardev_init(void)
 
 	memset(&cedar_devp->iomap_addrs, 0, sizeof(struct iomap_para));
 
-    ret = request_irq(VE_IRQ_NO, VideoEngineInterupt, 0, "cedar_dev", NULL);
+    ret = request_irq(of_irq_get(dt_node, 0), VideoEngineInterupt, 0, "cedar_dev", NULL);
     if (ret < 0) {
         printk("request irq err\n");
         return -EINVAL;
@@ -1141,12 +1141,17 @@ static int __init cedardev_init(void)
 	//val |= 0x7fffffff;
 	//writel(val,(volatile void *)0xf1c00000);
 
-	printk(KERN_NOTICE "clock\n");
-	ve_pll4clk = clk_get(NULL,"ve_pll");
+	ve_pll4clk = of_clk_get_by_name(dt_node, "ve_pll"); // pll-ve ?????
 	pll4clk_rate = clk_get_rate(ve_pll4clk);
 	/* getting ahb clk for ve!(macc) */
-	ahb_veclk = clk_get(NULL,"ahb_ve");
-	ve_moduleclk = clk_get(NULL,"ve");
+	ahb_veclk = of_clk_get_by_name(dt_node,"ahb_ve"); // ahb1/ahb2 ?????
+	ve_moduleclk = of_clk_get_by_name(dt_node,"ve");
+	if (IS_ERR(ve_moduleclk)) {
+		printk("ve is wrong!\n");
+	}
+	if (IS_ERR(ahb_veclk)) {
+		printk("ahb_ve is wrong!\n");
+	}
 	if(clk_set_parent(ve_moduleclk, ve_pll4clk)){
 		printk("set parent of ve_moduleclk to ve_pll4clk failed!\n");
 		return -EFAULT;
@@ -1158,22 +1163,23 @@ static int __init cedardev_init(void)
 		/*default the ve freq to 160M by lys 2011-12-23 15:25:34*/
 		__set_ve_freq(160);
 	/*geting dram clk for ve!*/
-	dram_veclk = clk_get(NULL, "sdram_ve");
-	hosc_clk = clk_get(NULL,"hosc");
-	avs_moduleclk = clk_get(NULL,"avs");
-	if(clk_set_parent(avs_moduleclk, hosc_clk)){
-		printk("set parent of avs_moduleclk to hosc_clk failed!\n");
-		return -EFAULT;
-	}
+	dram_veclk = of_clk_get_by_name(dt_node, "sdram_ve"); // dram-ve ?????
+//	hosc_clk = clk_get(NULL,"hosc"); // wut? parent of avs? <- osc24M ???
+	avs_moduleclk = of_clk_get_by_name(dt_node,"avs"); // avs
+//	if(clk_set_parent(avs_moduleclk, hosc_clk)){ // needed ???
+//		printk("set parent of avs_moduleclk to hosc_clk failed!\n");
+//		return -EFAULT;
+//	}
 
 	/*for clk test*/
 	#ifdef CEDAR_DEBUG
-	printk("PLL4 CLK:0xf1c20018 is:%x\n", *(volatile int *)0xf1c20018);
+/*	printk("PLL4 CLK:0xf1c20018 is:%x\n", *(volatile int *)0xf1c20018);
 	printk("AHB CLK:0xf1c20064 is:%x\n", *(volatile int *)0xf1c20064);
 	printk("VE CLK:0xf1c2013c is:%x\n", *(volatile int *)0xf1c2013c);
 	printk("SDRAM CLK:0xf1c20100 is:%x\n", *(volatile int *)0xf1c20100);
-	printk("SRAM:0xf1c00000 is:%x\n", *(volatile int *)0xf1c00000);
+	printk("SRAM:0xf1c00000 is:%x\n", *(volatile int *)0xf1c00000);*/
 	#endif
+
 	/* Create char device */
 	devno = MKDEV(g_dev_major, g_dev_minor);
 	cdev_init(&cedar_devp->cdev, &cedardev_fops);
@@ -1201,7 +1207,7 @@ static void __exit cedardev_exit(void)
 	struct platform_device *pdev = NULL;
     struct device_node *dt_node;
 
-    dt_node = of_find_node_by_path("/video-engine");
+    dt_node = of_find_node_by_path("/soc@01c00000/video-engine");
 
     if (!dt_node) {
         printk(KERN_ERR "(E) Failed to find device-tree node\n");
