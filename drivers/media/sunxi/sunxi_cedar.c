@@ -57,6 +57,7 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/of_platform.h>
 #include <linux/of_irq.h>
+#include <linux/of_address.h>
 
 // TODO: this should be replaced by usage of device tree!
 enum {
@@ -1035,12 +1036,20 @@ static int __init cedardev_init(void)
 	int ret = 0;
 	int err = 0;
 	int devno;
+	unsigned int val;
     dev_t dev = 0;
 	struct platform_device *pdev = NULL;
     struct device_node *dt_node;
 	resource_size_t pa;
+	void *pll4_clk_addr, *ahb_clk_addr, *ve_clk_addr, 
+	     *sdram_clk_addr, *sram_addr;
 
     dt_node = of_find_node_by_path("/soc@01c00000/video-engine");
+	pll4_clk_addr = of_iomap(dt_node, 0);
+	ahb_clk_addr = of_iomap(dt_node, 1);
+	ve_clk_addr = of_iomap(dt_node, 2);
+	sdram_clk_addr = of_iomap(dt_node, 3);
+	sram_addr = of_iomap(dt_node, 4);
 
     if (!dt_node) {
         printk(KERN_ERR "(E) Failed to find device-tree node\n");
@@ -1132,14 +1141,13 @@ static int __init cedardev_init(void)
 
     // TODO: is it really needed ????
 	//VE_SRAM mapping to AC320
-	//val = readl((const volatile void *)0xf1c00000);
-	//val &= 0x80000000;
-	//printk(KERN_NOTICE "writel\n");
-	//writel(val,(volatile void *)0xf1c00000);
+	val = readl((const volatile void *)sram_addr);
+	val &= 0x80000000;
+	writel(val,(volatile void *)sram_addr);
 	//remapping SRAM to MACC for codec test
-	//val = readl((const volatile void *)0xf1c00000);
-	//val |= 0x7fffffff;
-	//writel(val,(volatile void *)0xf1c00000);
+	val = readl((const volatile void *)sram_addr);
+	val |= 0x7fffffff;
+	writel(val,(volatile void *)sram_addr);
 
 	ve_pll4clk = of_clk_get_by_name(dt_node, "ve_pll"); // pll-ve ?????
 	pll4clk_rate = clk_get_rate(ve_pll4clk);
@@ -1173,11 +1181,11 @@ static int __init cedardev_init(void)
 
 	/*for clk test*/
 	#ifdef CEDAR_DEBUG
-/*	printk("PLL4 CLK:0xf1c20018 is:%x\n", *(volatile int *)0xf1c20018);
-	printk("AHB CLK:0xf1c20064 is:%x\n", *(volatile int *)0xf1c20064);
-	printk("VE CLK:0xf1c2013c is:%x\n", *(volatile int *)0xf1c2013c);
-	printk("SDRAM CLK:0xf1c20100 is:%x\n", *(volatile int *)0xf1c20100);
-	printk("SRAM:0xf1c00000 is:%x\n", *(volatile int *)0xf1c00000);*/
+	printk("PLL4 CLK:0xf1c20018 is:%x\n", *(volatile int *)pll4_clk_addr); //0x01c20018);
+	printk("AHB CLK:0xf1c20064 is:%x\n", *(volatile int *)ahb_clk_addr); //0xf1c20064);
+	printk("VE CLK:0xf1c2013c is:%x\n", *(volatile int *)ve_clk_addr); //0xf1c2013c);
+	printk("SDRAM CLK:0xf1c20100 is:%x\n", *(volatile int *)sdram_clk_addr); //0xf1c20100);
+	printk("SRAM:0xf1c00000 is:%x\n", *(volatile int *)sram_addr); //0xf1c00000);
 	#endif
 
 	/* Create char device */

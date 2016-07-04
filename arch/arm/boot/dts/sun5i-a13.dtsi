@@ -345,6 +345,11 @@
 
 		video-engine {
 			compatible = "allwinner,sun5i-a13-video-engine";
+			reg = <0x01c20018 0x4>,
+			      <0x01c20064 0x4>,
+			      <0x01c2013c 0x4>,
+			      <0x01c20100 0x4>,
+			      <0x01c00000 0x4>;
 			memory-region = <&ve_reserved>;
 			clocks = <&pll4>,
 				 <&ahb_gates 32>,
