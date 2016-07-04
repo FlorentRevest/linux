@@ -379,6 +379,9 @@ void cedardev_insert_task(struct cedarv_engine_task* new_task)
 	if(list_empty(&run_task_list))
 		new_task->is_first_task = 1;
 
+	/* Run_task_list traverse the list, if you insert a higher priority than the task list node in the task priority, and the current task is not inserted into the first insertion task.
+	* Then it will put a high priority task in front of the queue in the end the task taken from a high priority queuing. 
+	*/
 	/*遍历run_task_list链表，如果插入的任务优先级比链表节点中的任务优先级高，并且当前插入任务不是第一个插入的任务。
 	 *那么就将优先级高的任务放于前面，队列中的任务采取从高到底的优先级队列排队。
 	 */
@@ -397,6 +400,7 @@ void cedardev_insert_task(struct cedarv_engine_task* new_task)
 	}
 	printk("\n");
 #endif
+	/* Every time you insert a task, it will be the current time timer is reset to the current system jiffies */
 	/*每次插入一个任务，就将当前的计时器时间重置为系统当前的jiffies*/
 	mod_timer(&cedar_devp->cedar_engine_timer, jiffies + 0);
 
@@ -410,6 +414,8 @@ int cedardev_del_task(int task_id)
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
+	/* If run_task list traverse the list to find the corresponding id number, then the task will be moved to the list run_task_list del_task_list the list header.
+	*/
 	/*遍历run_task_list链表
 	 *如果找到对应的id号，那么就将run_task_list链表中的任务移到del_task_list链表的表头。
 	 */
@@ -424,6 +430,7 @@ int cedardev_del_task(int task_id)
 	}
 	spin_unlock_irqrestore(&cedar_spin_lock, flags);
 
+	//No corresponding ID
 	//找不到对应 ID
 	return -1;
 }
@@ -434,6 +441,7 @@ int cedardev_check_delay(int check_prio)
 	int timeout_total = 0;
 	unsigned long flags;
 
+	/*Get the total waiting time*/
 	/*获取总的等待时间*/
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 	list_for_each_entry(task_entry, &run_task_list, list) {
@@ -485,10 +493,10 @@ static void cedar_engine_for_events(unsigned long arg)
 	list_for_each_entry_safe(task_entry, task_entry_tmp, &del_task_list, list) {
 		info.si_signo = SIG_CEDAR;
 		info.si_code = task_entry->t.ID;
-		if (task_entry->status == TASK_TIMEOUT){//表示任务timeout删除
+		if (task_entry->status == TASK_TIMEOUT){//表示任务timeout删除 -> It represents the task timeout deleted
 			info.si_errno = TASK_TIMEOUT;
 			send_sig_info(SIG_CEDAR, &info, task_entry->task_handle);
-		}else if(task_entry->status == TASK_RELEASE){//表示任务正常运行完毕删除
+		}else if(task_entry->status == TASK_RELEASE){//表示任务正常运行完毕删除 -> It indicates that the task is completed properly deleted
 			info.si_errno = TASK_RELEASE;
 			send_sig_info(SIG_CEDAR, &info, task_entry->task_handle);
 		}
@@ -496,6 +504,7 @@ static void cedar_engine_for_events(unsigned long arg)
 		kfree(task_entry);
 	}
 
+	/*Activate the list of task*/
 	/*激活链表中的task*/
 	if(!list_empty(&run_task_list)){
 		task_entry = list_entry(run_task_list.next, struct cedarv_engine_task, list);
@@ -503,7 +512,7 @@ static void cedar_engine_for_events(unsigned long arg)
 			task_entry->running = 1;
 			info.si_signo = SIG_CEDAR;
 			info.si_code = task_entry->t.ID;
-			info.si_errno = TASK_INIT;	//任务已经启动
+			info.si_errno = TASK_INIT;	//任务已经启动 -> The task has been started
 			send_sig_info(SIG_CEDAR, &info, task_entry->task_handle);
 		}
 
@@ -611,13 +620,15 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				return -EFAULT;
 			}
 			spin_lock_irqsave(&cedar_spin_lock, flags);
+			/*If the task is unblocked, the requester can return immediately*/
 			/*如果task为非阻塞状态，请求者可以立即返回*/
 			if(!list_empty(&run_task_list) && ( task_ret.block_mode == CEDAR_NONBLOCK_TASK)){
 				spin_unlock_irqrestore(&cedar_spin_lock, flags);
-				return CEDAR_RUN_LIST_NONULL; //run_task_list里面有任务，返回-1
+				return CEDAR_RUN_LIST_NONULL; //run_task_list里面有任务，返回-1 -> run task list which has the task, returns -1
 			}
 			spin_unlock_irqrestore(&cedar_spin_lock, flags);
 
+			/*If the task is blocked, the task is inserted run_task_list the list*/
 			/*如果task为阻塞状态，将task插入run_task_list链表中*/
 			task_ptr = kmalloc(sizeof(struct cedarv_engine_task), GFP_KERNEL);
 			if(!task_ptr){
@@ -637,7 +648,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 			enable_cedar_hw_clk();
 
-			return task_ptr->is_first_task;//插入run_task_list链表中的任务是第一个任务，返回1，不是第一个任务返回0. hx modify 2011-7-28 16:59:16！！！
+			return task_ptr->is_first_task;//插入run_task_list链表中的任务是第一个任务，返回1，不是第一个任务返回0. hx modify 2011-7-28 16:59:16！！！ -> Insert run_task_list the list of tasks is the first task, returns 1, the first task is not to return 0.
 #else
 			enable_cedar_hw_clk();
 			cedar_devp->ref_count++;
@@ -646,6 +657,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		case IOCTL_ENGINE_REL:
 #ifdef USE_CEDAR_ENGINE
 			rel_taskid = (int)arg;
+			//Use the id of the task the task deletion. Return Value Meaning: no corresponding ID, return -1; find the corresponding ID, return 0.
 			/*
 			 *	利用任务的id号进行任务的删除操作。返回值意义：找不到对应ID，返回-1;找到对应ID，返回0。
 			 */
@@ -658,6 +670,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		case IOCTL_ENGINE_CHECK_DELAY:
 			{
 				struct cedarv_engine_task_info task_info;
+				/*Being from user space to query task priorities, total_time by task priority, the total time statistics to wait. In this interface, but also to the user to pass the current frametime task (it reduces the interface, but the user space to set up a multi-empty frametime value) for the current task of frametime, it can also be used to obtain additional interfaces, but to do so, and total_time frametime is in a different interface. benefit? ? ?*/
 				/*从用户空间中获取要查询的任务优先级，通过任务优先级，统计需要等待的总时间total_time.
 				 * 在这个接口中，同时也给用户传递了当前任务的frametime（这样做可以减少接口，但是用户空间要多设置一个空的frametime值）
 				 *对于当前task的frametime，也可以用额外的接口获取，但是这样做，frametime和total_time就处于不同接口中。好处？？？
@@ -666,13 +679,14 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					printk("IOCTL_ENGINE_CHECK_DELAY copy_from_user fail\n");
 					return -EFAULT;
 				}
-				task_info.total_time = cedardev_check_delay(task_info.task_prio);//task_info.task_prio是传递过来的优先级
+				task_info.total_time = cedardev_check_delay(task_info.task_prio);//task_info.task_prio是传递过来的优先级 <- taskinfo.task prio priority is to pass over
 #ifdef CEDAR_DEBUG
 				printk("%s,%d,%d\n", __func__, __LINE__, task_info.total_time);
 #endif
 				task_info.frametime = 0;
 				spin_lock_irqsave(&cedar_spin_lock, flags);
 				if(!list_empty(&run_task_list)){
+					/*Get run_task list chain in the first task, the task that is currently running, get frametime time by the currently running task*/
 					/*获取run_task_list链表中的第一个任务，也就是当前运行的任务，通过当前运行的任务获取frametime时间*/
 					struct cedarv_engine_task *task_entry;
 #ifdef CEDAR_DEBUG
@@ -686,6 +700,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif
 				}
 				spin_unlock_irqrestore(&cedar_spin_lock, flags);
+				/*The task priority, total_time, frametime copied to the user space. The value of the task priority is set by the user, total_time is the total time needed to wait, frametime is currently running time of the task. In fact, the best information on the current task with another interface. Reducing coupling and extensibility interfaces.*/
 				/*
 				 *将任务优先级，total_time,frametime拷贝到用户空间。任务优先级还是用户设置的值，total_time是需要等待的总时间，
 				 *frametime是当前任务的运行时间.其实当前任务的信息最好用另一个接口实现.减少耦合度和接口的拓展性.
@@ -709,6 +724,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			wait_event_interruptible_timeout(wait_ve, cedar_devp->irq_flag, ve_timeout*HZ);
 			//printk("%s,%d,ve_timeout:%d,cedar_devp->irq_value:%d\n", __func__, __LINE__, ve_timeout, cedar_devp->irq_value);
 			cedar_devp->irq_flag = 0;
+			/*It returns 1, indicating that the interrupt returns, returns 0, indicating timeout return*/
 			/*返回1，表示中断返回，返回0，表示timeout返回*/
 			return cedar_devp->irq_value;
 
