@@ -361,7 +361,8 @@
 				      "ve",
 				      "sdram_ve",
 				      "avs";
-			interrupts = <53>;
+			resets = <&ccu RST_VE>;
+			interrupts = <53>; //// /!\ TODO: SUN7I: +32
 		};
 
 		ccu: clock@01c20000 {
