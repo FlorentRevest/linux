@@ -30,7 +30,3 @@ obj-y += rc/
 
 obj-y += common/ platform/ pci/ usb/ mmc/ firewire/
 obj-$(CONFIG_VIDEO_DEV) += radio/
-
-ifdef CONFIG_VIDEO_SUNXI_CEDAR
-  obj-$(CONFIG_VIDEO_SUNXI_CEDAR) += sunxi/
-endif

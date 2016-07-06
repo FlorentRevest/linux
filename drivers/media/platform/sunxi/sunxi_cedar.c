@@ -58,6 +58,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/reset.h>
 
 // TODO: this should be replaced by usage of device tree!
 enum {
@@ -115,34 +116,9 @@ enum sw_ic_ver {
 	SUNXI_VER_A20 = SUNXI_SOC_A20,
 };
 
-enum sw_ic_ver sw_get_ic_ver = SUNXI_VER_A13; // TODO: A13A, A13B ???
+enum sw_ic_ver sw_get_ic_ver = SUNXI_VER_A13A; // TODO: A13A, A13B ???
 
-// TODO: this should be replaced by a better clock handling
-typedef struct clk
-{
-	__aw_ccu_clk_t  *clk;       /* clock handle from ccu csp                            */
-	__s32           usr_cnt;    /* user count                                           */
-	__s32           enable;     /* enable count, when it down to 0, it will be disalbe  */
-	__s32           hash;       /* hash value, for fast search without string compare   */
-
-	__aw_ccu_clk_t  *(*get_clk)(__s32 id);
-	/* set clock                                            */
-	__aw_ccu_err_e  (*set_clk)(__aw_ccu_clk_t *clk);
-	/* get clock                                            */
-	struct clk      *parent;    /* parent clock node pointer                            */
-	struct clk      *child;     /* child clock node pinter                              */
-	struct clk      *left;      /* left brother node pointer                            */
-	struct clk      *right;     /* right bother node pointer                            */
-
-} __ccu_clk_t;
-
-static inline const char *clk_name(struct clk *clk)
-{
-	return clk->clk->name;
-}
-
-// TODO: replace
-//extern int clk_reset(struct clk *clk, int reset);
+struct clk;
 
 #define DRV_VERSION "0.01alpha"
 
@@ -165,16 +141,12 @@ int g_dev_minor = CEDARDEV_MINOR;
 module_param(g_dev_major, int, S_IRUGO);//S_IRUGO represent that g_dev_major can be read,but canot be write
 module_param(g_dev_minor, int, S_IRUGO);
 
-// TODO: SUN7I: 32 else 0
-#define SW_INT_START		0
-#define SW_INT_IRQNO_VE			(53 + SW_INT_START)
-#define VE_IRQ_NO (SW_INT_IRQNO_VE)
-
 struct clk *ve_moduleclk = NULL;
 struct clk *ve_pll4clk = NULL;
 struct clk *ahb_veclk = NULL;
 struct clk *dram_veclk = NULL;
 struct clk *avs_moduleclk = NULL;
+struct reset_control *rstc;
 // struct clk *hosc_clk = NULL; NOT NEEDED -> just used for clk_set_parent
 
 static unsigned long pll4clk_rate = 720000000;
@@ -225,6 +197,8 @@ static irqreturn_t VideoEngineInterupt(int irq, void *dev)
 	volatile int val;
 	int modual_sel;
 	struct iomap_para addrs = cedar_devp->iomap_addrs;
+
+	printk(KERN_NOTICE "cedar: VideoEngineInterrupt\n");
 
 	modual_sel = readl(addrs.regs_macc + 0);
 	modual_sel &= 0xf;
@@ -280,6 +254,7 @@ unsigned int cedardev_poll(struct file *filp, struct poll_table_struct *wait)
 {
 	int mask = 0;
 	struct cedar_dev *devp = filp->private_data;
+	printk(KERN_NOTICE "cedar: cedardev_poll\n");
 
 	poll_wait(filp, &devp->wq, wait);
 	if (devp->irq_flag == 1) {
@@ -307,6 +282,7 @@ int enable_cedar_hw_clk(void)
 {
 	unsigned long flags;
 	int res = -EFAULT;
+	printk(KERN_NOTICE "cedar: enable_cedar_hw_clk\n");
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
@@ -314,19 +290,19 @@ int enable_cedar_hw_clk(void)
 		goto out;
 	clk_status = 1;
 
-	if(0 != clk_enable(ahb_veclk)){
+	if(0 != clk_prepare_enable(ahb_veclk)){
 		printk("ahb_veclk failed; \n");
 		goto out;
 	}
-	if(0 != clk_enable(ve_moduleclk)){
+	if(0 != clk_prepare_enable(ve_moduleclk)){
 		printk("ve_moduleclk failed; \n");
 		goto out3;
 	}
-	if(0 != clk_enable(dram_veclk)){
+	if(0 != clk_prepare_enable(dram_veclk)){
 		printk("dram_veclk failed; \n");
 		goto out2;
 	}
-	if(0 != clk_enable(avs_moduleclk)){
+	if(0 != clk_prepare_enable(avs_moduleclk)){
 		printk("ve_moduleclk failed; \n");
 		goto out1;
 	}
@@ -350,6 +326,7 @@ out:
 int disable_cedar_hw_clk(void)
 {
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: disable_cedar_hw_clk\n");
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
@@ -373,6 +350,7 @@ void cedardev_insert_task(struct cedarv_engine_task* new_task)
 {
 	struct cedarv_engine_task *task_entry;
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: cedardev_insert_task\n");
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
@@ -411,6 +389,7 @@ int cedardev_del_task(int task_id)
 {
 	struct cedarv_engine_task *task_entry;
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: cedardev_del_task\n");
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
@@ -440,6 +419,7 @@ int cedardev_check_delay(int check_prio)
 	struct cedarv_engine_task *task_entry;
 	int timeout_total = 0;
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: cedardev_check_delay\n");
 
 	/*Get the total waiting time*/
 	/*获取总的等待时间*/
@@ -459,6 +439,7 @@ int cedardev_check_delay(int check_prio)
 static void cedar_engine_for_timer_rel(unsigned long arg)
 {
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: cedar_engine_for_timer_rel\n");
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
@@ -477,6 +458,7 @@ static void cedar_engine_for_events(unsigned long arg)
 	struct cedarv_engine_task *task_entry, *task_entry_tmp;
 	struct siginfo info;
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: cedar_engine_for_events\n");
 
 	spin_lock_irqsave(&cedar_spin_lock, flags);
 
@@ -525,6 +507,7 @@ static void cedar_engine_for_events(unsigned long arg)
 static unsigned int g_ctx_reg0;
 static void save_context(void)
 {
+	printk(KERN_NOTICE "cedar: save_context\n");
 	if (SUNXI_VER_A10A == sw_get_ic_ver ||
 			SUNXI_VER_A13A == sw_get_ic_ver)
 		g_ctx_reg0 = readl((const volatile void *)0xf1c20e00);
@@ -532,6 +515,7 @@ static void save_context(void)
 
 static void restore_context(void)
 {
+	printk(KERN_NOTICE "cedar: restore_context\n");
 	if (SUNXI_VER_A10A == sw_get_ic_ver ||
 			SUNXI_VER_A13A == sw_get_ic_ver)
 		writel(g_ctx_reg0, (volatile void *)0xf1c20e00);
@@ -539,6 +523,7 @@ static void restore_context(void)
 
 static long __set_ve_freq (int arg)
 {
+	printk(KERN_NOTICE "cedar: __set_ve_freq\n");
 	/*
 	 ** Although the Allwinner sun7i driver sources indicate that the VE
 	 ** clock can go up to 500MHz, very simple JPEG and MPEG decoding
@@ -608,6 +593,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct cedarv_engine_task *task_ptr = NULL;
 #endif
 	unsigned long flags;
+	printk(KERN_NOTICE "cedar: cedardev_ioctl %u\n", cmd);
 
 	devp = filp->private_data;
 
@@ -729,7 +715,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return cedar_devp->irq_value;
 
 		case IOCTL_ENABLE_VE:
-			clk_enable(ve_moduleclk);
+			clk_prepare_enable(ve_moduleclk);
 			break;
 
 		case IOCTL_DISABLE_VE:
@@ -738,10 +724,10 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		case IOCTL_RESET_VE:
 			clk_disable(dram_veclk);
-			// TODO: what the heck
+			reset_control_assert(rstc);
 			//clk_reset(ve_moduleclk, 1);
 			//clk_reset(ve_moduleclk, 0);
-			clk_enable(dram_veclk);
+			clk_prepare_enable(dram_veclk);
 			break;
 
 		case IOCTL_SET_VE_FREQ:
@@ -908,6 +894,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 static int cedardev_open(struct inode *inode, struct file *filp)
 {
 	struct cedar_dev *devp;
+	printk(KERN_NOTICE "cedar: cedardev_open\n");
 	devp = container_of(inode->i_cdev, struct cedar_dev, cdev);
 	filp->private_data = devp;
 	if (down_interruptible(&devp->sem)) {
@@ -923,6 +910,7 @@ static int cedardev_open(struct inode *inode, struct file *filp)
 static int cedardev_release(struct inode *inode, struct file *filp)
 {
 	struct cedar_dev *devp;
+	printk(KERN_NOTICE "cedar: cedardev_release\n");
 
 	devp = filp->private_data;
 	if (down_interruptible(&devp->sem)) {
@@ -936,10 +924,12 @@ static int cedardev_release(struct inode *inode, struct file *filp)
 
 void cedardev_vma_open(struct vm_area_struct *vma)
 {
+	printk(KERN_NOTICE "cedar: cedardev_vma_open\n");
 }
 
 void cedardev_vma_close(struct vm_area_struct *vma)
 {
+	printk(KERN_NOTICE "cedar: cedardev_vma_close\n");
 }
 
 static struct vm_operations_struct cedardev_remap_vm_ops = {
@@ -956,6 +946,7 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
 	unsigned int io_ram = 0;
 	VAddr = vma->vm_pgoff << 12;
 	addrs = cedar_devp->iomap_addrs;
+	printk(KERN_NOTICE "cedar: cedardev_mmap\n");
 
 	if (VAddr == (unsigned int)addrs.regs_macc) {
 		temp_pfn = MACC_REGS_BASE >> 12;
@@ -998,6 +989,7 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
 
 static int snd_sw_cedar_suspend(struct platform_device *pdev,pm_message_t state)
 {
+	printk(KERN_NOTICE "cedar: snd_sw_cedar_suspend\n");
 	disable_cedar_hw_clk();
 
 	return 0;
@@ -1005,6 +997,7 @@ static int snd_sw_cedar_suspend(struct platform_device *pdev,pm_message_t state)
 
 static int snd_sw_cedar_resume(struct platform_device *pdev)
 {
+	printk(KERN_NOTICE "cedar: snd_sw_cedar_resume\n");
 	if(cedar_devp->ref_count == 0){
 		return 0;
 	}
@@ -1052,6 +1045,7 @@ static int __init cedardev_init(void)
 	int ret = 0;
 	int err = 0;
 	int devno;
+	int irq_no;
 	unsigned int val;
 	dev_t dev = 0;
 	struct platform_device *pdev = NULL;
@@ -1060,6 +1054,7 @@ static int __init cedardev_init(void)
 	void *pll4_clk_addr, *ahb_clk_addr, *ve_clk_addr, 
 	     *sdram_clk_addr, *sram_addr;
 
+	printk(KERN_NOTICE "cedar: cedardev_init\n");
 	dt_node = of_find_node_by_path("/soc@01c00000/video-engine");
 	pll4_clk_addr = of_iomap(dt_node, 0);
 	ahb_clk_addr = of_iomap(dt_node, 1);
@@ -1084,6 +1079,8 @@ static int __init cedardev_init(void)
 		printk(KERN_ERR "(E) Failed to reserve mem\n");
 		return -ENODEV;
 	}
+
+	irq_no = of_irq_get(dt_node, 0);
 
 #ifdef CONFIG_CMA
 	/* If having CMA enabled, just rely on CMA for memory allocation */
@@ -1136,14 +1133,14 @@ static int __init cedardev_init(void)
 		return -ENOMEM;
 	}
 	memset(cedar_devp, 0, sizeof(struct cedar_dev));
-	cedar_devp->irq = VE_IRQ_NO;
+	cedar_devp->irq = irq_no;
 
 	sema_init(&cedar_devp->sem, 1);
 	init_waitqueue_head(&cedar_devp->wq);
 
 	memset(&cedar_devp->iomap_addrs, 0, sizeof(struct iomap_para));
 
-	ret = request_irq(of_irq_get(dt_node, 0), VideoEngineInterupt, 0, "cedar_dev", NULL);
+	ret = request_irq(irq_no, VideoEngineInterupt, 0, "cedar_dev", NULL);
 	if (ret < 0) {
 		printk("request irq err\n");
 		return -EINVAL;
@@ -1195,6 +1192,8 @@ static int __init cedardev_init(void)
 	//		return -EFAULT;
 	//	}
 
+	rstc = of_reset_control_get(dt_node, NULL);
+
 	/*for clk test*/
 #ifdef CEDAR_DEBUG
 	printk("PLL4 CLK:0xf1c20018 is:%x\n", *(volatile int *)pll4_clk_addr); //0x01c20018);
@@ -1227,9 +1226,11 @@ module_init(cedardev_init);
 
 static void __exit cedardev_exit(void)
 {
+	int irq_no;
 	dev_t dev;
 	struct platform_device *pdev = NULL;
 	struct device_node *dt_node;
+	printk(KERN_NOTICE "cedar: cedardev_exit\n");
 
 	dt_node = of_find_node_by_path("/soc@01c00000/video-engine");
 
@@ -1245,9 +1246,11 @@ static void __exit cedardev_exit(void)
 		return;
 	}
 
+	irq_no = of_irq_get(dt_node, 0);
+
 	dev = MKDEV(g_dev_major, g_dev_minor);
 
-	free_irq(VE_IRQ_NO, NULL);
+	free_irq(irq_no, NULL);
 	iounmap(cedar_devp->iomap_addrs.regs_macc);
 	iounmap(cedar_devp->iomap_addrs.regs_avs);
 	/* Destroy char device */
