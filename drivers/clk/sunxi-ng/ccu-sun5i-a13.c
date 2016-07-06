@@ -29,8 +29,8 @@
 
 #include "ccu-sun5i-a13.h"
 
-static SUNXI_CCU_M_WITH_GATE(ve_clk, "ve", "pll4",
-			     0x13c, 16, 3, BIT(31), 0);
+static SUNXI_CCU_GATE(ve_clk, "ve", "pll4",
+		      0x13c, BIT(31), 0);
 
 static SUNXI_CCU_GATE(avs_clk,	"avs",	"osc24M",
 		      0x144, BIT(31), 0);
@@ -49,6 +49,7 @@ static struct clk_hw_onecell_data sun5i_a13_hw_clks = {
 };
 
 static struct ccu_reset_map sun5i_a13_ccu_resets[] = {
+	[RST_VE]		=  { 0x13c, BIT(0) },
 };
 
 static const struct sunxi_ccu_desc sun5i_a13_ccu_desc = {
