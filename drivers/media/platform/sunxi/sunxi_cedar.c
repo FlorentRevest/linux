@@ -969,7 +969,6 @@ static int __init cedardev_init(void)
 
 	irq_no = of_irq_get(dt_node, 0);
 
-#ifdef CONFIG_CMA
 	/* If having CMA enabled, just rely on CMA for memory allocation */
 	ve_size = 80 * SZ_1M;
 	ve_start_virt = dma_alloc_coherent(&pdev->dev, ve_size, &pa,
@@ -986,12 +985,6 @@ static int __init cedardev_init(void)
 		ve_size = 0;
 		return -ENODEV;
 	}
-#else
-	if (ve_size == 0) {
-		printk("[cedar dev]: not installed! ve_mem_reserve=0\n");
-		return -ENODEV;
-	}
-#endif
 
 	printk("[cedar dev]: install start!!!\n");
 	if((platform_device_register(&sw_device_cedar))<0)
@@ -1167,13 +1160,11 @@ static void __exit cedardev_exit(void)
 		kfree(cedar_devp);
 	}
 
-#ifdef CONFIG_CMA
 	if (ve_start_virt) {
 		dma_free_coherent(&pdev->dev, ve_size, ve_start_virt, ve_start);
 		ve_start_virt = 0;
 		ve_size = 0;
 	}
-#endif
 	of_reserved_mem_device_release(&pdev->dev);
 }
 module_exit(cedardev_exit);
