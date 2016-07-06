@@ -52,7 +52,6 @@
 #include <asm/proc-fns.h>
 #include <linux/kernel.h>
 #include <linux/clocksource.h>
-#include "aw_ccu.h"
 #include "sunxi_cedar.h"
 #include <linux/of_reserved_mem.h>
 #include <linux/of_platform.h>
@@ -60,11 +59,7 @@
 #include <linux/of_address.h>
 #include <linux/reset.h>
 
-struct clk;
-
 #define DRV_VERSION "0.01alpha"
-
-#undef USE_CEDAR_ENGINE
 
 #ifndef CEDARDEV_MAJOR
 #define CEDARDEV_MAJOR (150)
@@ -83,13 +78,15 @@ int g_dev_minor = CEDARDEV_MINOR;
 module_param(g_dev_major, int, S_IRUGO);//S_IRUGO represent that g_dev_major can be read,but canot be write
 module_param(g_dev_minor, int, S_IRUGO);
 
+struct clk;
+
 struct clk *ve_moduleclk = NULL;
 struct clk *ve_pll4clk = NULL;
 struct clk *ahb_veclk = NULL;
 struct clk *dram_veclk = NULL;
 struct clk *avs_moduleclk = NULL;
-struct reset_control *rstc;
 struct clk *hosc_clk = NULL;
+struct reset_control *rstc = NULL;
 
 static unsigned long pll4clk_rate = 720000000;
 
@@ -465,7 +462,6 @@ static void restore_context(void)
 
 static long __set_ve_freq (int arg)
 {
-	printk(KERN_NOTICE "cedar: __set_ve_freq\n");
 	/*
 	 ** Although the Allwinner sun7i driver sources indicate that the VE
 	 ** clock can go up to 500MHz, very simple JPEG and MPEG decoding
@@ -476,6 +472,8 @@ static long __set_ve_freq (int arg)
 	int min_rate = 100000000;
 	int arg_rate = arg * 1000000;	/* arg_rate is specified in MHz */
 	int divisor;
+
+	printk(KERN_NOTICE "cedar: __set_ve_freq\n");
 
 	if (arg_rate > max_rate)
 		arg_rate = max_rate;
@@ -529,11 +527,6 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	unsigned int v;
 	int ve_timeout = 0;
 	struct cedar_dev *devp;
-#ifdef USE_CEDAR_ENGINE
-	int rel_taskid = 0;
-	struct __cedarv_task task_ret;
-	struct cedarv_engine_task *task_ptr = NULL;
-#endif
 	unsigned long flags;
 	printk(KERN_NOTICE "cedar: cedardev_ioctl %u\n", cmd);
 
@@ -542,58 +535,12 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch (cmd)
 	{
 		case IOCTL_ENGINE_REQ:
-#ifdef USE_CEDAR_ENGINE
-			if(copy_from_user(&task_ret, (void __user*)arg, sizeof(struct __cedarv_task))){
-				printk("IOCTL_ENGINE_REQ copy_from_user fail\n");
-				return -EFAULT;
-			}
-			spin_lock_irqsave(&cedar_spin_lock, flags);
-			/*If the task is unblocked, the requester can return immediately*/
-			/*如果task为非阻塞状态，请求者可以立即返回*/
-			if(!list_empty(&run_task_list) && ( task_ret.block_mode == CEDAR_NONBLOCK_TASK)){
-				spin_unlock_irqrestore(&cedar_spin_lock, flags);
-				return CEDAR_RUN_LIST_NONULL; //run_task_list里面有任务，返回-1 -> run task list which has the task, returns -1
-			}
-			spin_unlock_irqrestore(&cedar_spin_lock, flags);
-
-			/*If the task is blocked, the task is inserted run_task_list the list*/
-			/*如果task为阻塞状态，将task插入run_task_list链表中*/
-			task_ptr = kmalloc(sizeof(struct cedarv_engine_task), GFP_KERNEL);
-			if(!task_ptr){
-				printk("get mem for IOCTL_ENGINE_REQ\n");
-				return PTR_ERR(task_ptr);
-			}
-			task_ptr->task_handle = current;
-			task_ptr->t.ID = task_ret.ID;
-			task_ptr->t.timeout = jiffies + msecs_to_jiffies(1000*task_ret.timeout);//ms to jiffies
-			task_ptr->t.frametime = task_ret.frametime;
-			task_ptr->t.task_prio = task_ret.task_prio;
-			task_ptr->running = 0;
-			task_ptr->is_first_task = 0;
-			task_ptr->status = TASK_INIT;
-
-			cedardev_insert_task(task_ptr);
-
-			enable_cedar_hw_clk();
-
-			return task_ptr->is_first_task;//插入run_task_list链表中的任务是第一个任务，返回1，不是第一个任务返回0. hx modify 2011-7-28 16:59:16！！！ -> Insert run_task_list the list of tasks is the first task, returns 1, the first task is not to return 0.
-#else
 			enable_cedar_hw_clk();
 			cedar_devp->ref_count++;
 			break;
-#endif
 		case IOCTL_ENGINE_REL:
-#ifdef USE_CEDAR_ENGINE
-			rel_taskid = (int)arg;
-			//Use the id of the task the task deletion. Return Value Meaning: no corresponding ID, return -1; find the corresponding ID, return 0.
-			/*
-			 *	利用任务的id号进行任务的删除操作。返回值意义：找不到对应ID，返回-1;找到对应ID，返回0。
-			 */
-			ret = cedardev_del_task(rel_taskid);
-#else
 			disable_cedar_hw_clk();
 			cedar_devp->ref_count--;
-#endif
 			return ret;
 		case IOCTL_ENGINE_CHECK_DELAY:
 			{
