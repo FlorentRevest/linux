@@ -355,12 +355,14 @@
 				 <&ahb_gates 32>,
 				 <&ccu CLK_VE>,
 				 <&dram_gates 0>,
-				 <&ccu CLK_AVS>;
+				 <&ccu CLK_AVS>,
+				 <&osc24M>;
 			clock-names = "ve_pll",
                                       "ahb_ve",
 				      "ve",
 				      "sdram_ve",
-				      "avs";
+				      "avs",
+				      "hosc";
 			resets = <&ccu RST_VE>;
 			interrupts = <53>; //// /!\ TODO: SUN7I: +32
 		};
