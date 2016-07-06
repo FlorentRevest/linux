@@ -89,13 +89,11 @@ struct clk *ahb_veclk = NULL;
 struct clk *dram_veclk = NULL;
 struct clk *avs_moduleclk = NULL;
 struct reset_control *rstc;
- struct clk *hosc_clk = NULL;
+struct clk *hosc_clk = NULL;
 
 static unsigned long pll4clk_rate = 720000000;
 
-#ifdef CONFIG_CMA
 static void *ve_start_virt;
-#endif
 unsigned long ve_start;
 unsigned long ve_size;
 extern int flush_clean_user_range(long start, long end);
@@ -106,7 +104,7 @@ struct iomap_para{
 
 static DECLARE_WAIT_QUEUE_HEAD(wait_ve);
 struct cedar_dev {
-	struct cdev cdev;	             /* char device struct                 */
+	struct cdev cdev;	         /* char device struct                 */
 	struct device *dev;              /* ptr to class device struct         */
 	struct class  *class;            /* class for auto create device node  */
 
@@ -669,8 +667,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		case IOCTL_RESET_VE:
 			clk_disable(dram_veclk);
 			reset_control_assert(rstc);
-			//clk_reset(ve_moduleclk, 1);
-			//clk_reset(ve_moduleclk, 0);
+			reset_control_deassert(rstc);
 			clk_prepare_enable(dram_veclk);
 			break;
 
@@ -903,11 +900,10 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	if (io_ram == 0) {
 		/* Set reserved and I/O flag for the area. */
-		// TODO: Here there was VM_RESERVED https://git.kernel.org/cgit/linux/kernel/git/stable/linux-stable.git/commit/?id=314e51b9851b but it was removed for VM_IO, is it ok ?
-		vma->vm_flags |= VM_IO;
+		vma->vm_flags |= VM_IO | (VM_DONTEXPAND | VM_DONTDUMP);
 
 		/* Select uncached access. */
-		//vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 		if (remap_pfn_range(vma, vma->vm_start, temp_pfn,
 					vma->vm_end - vma->vm_start, vma->vm_page_prot)) {
@@ -915,8 +911,7 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
 		}
 	} else {
 		/* Set reserved and I/O flag for the area. */
-		// TODO: Here there was VM_RESERVED https://git.kernel.org/cgit/linux/kernel/git/stable/linux-stable.git/commit/?id=314e51b9851b but it was removed for VM_IO, is it ok ?
-		vma->vm_flags |= VM_IO;
+		vma->vm_flags |= VM_IO | (VM_DONTEXPAND | VM_DONTDUMP);
 		/* Select uncached access. */
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
@@ -1097,7 +1092,6 @@ static int __init cedardev_init(void)
 	}
 	cedar_devp->iomap_addrs.regs_avs = ioremap(AVS_REGS_BASE, 1024);
 
-	// TODO: is it really needed ????
 	//VE_SRAM mapping to AC320
 	val = readl((const volatile void *)sram_addr);
 	val &= 0x80000000;
@@ -1107,10 +1101,10 @@ static int __init cedardev_init(void)
 	val |= 0x7fffffff;
 	writel(val,(volatile void *)sram_addr);
 
-	ve_pll4clk = of_clk_get_by_name(dt_node, "ve_pll"); // pll-ve ?????
+	ve_pll4clk = of_clk_get_by_name(dt_node, "ve_pll");
 	pll4clk_rate = clk_get_rate(ve_pll4clk);
 	/* getting ahb clk for ve!(macc) */
-	ahb_veclk = of_clk_get_by_name(dt_node,"ahb_ve"); // ahb1/ahb2 ?????
+	ahb_veclk = of_clk_get_by_name(dt_node,"ahb_ve");
 	ve_moduleclk = of_clk_get_by_name(dt_node,"ve");
 	if (IS_ERR(ve_moduleclk)) {
 		printk("ve is wrong!\n");
