@@ -20,25 +20,6 @@
 #include <dt-bindings/clock/sun5i-a13-ccu.h>
 #include <dt-bindings/reset/sun5i-a13-ccu.h>
 
-#define CLK_PLL_VIDEO		6
-#define CLK_PLL_VE		7
-#define CLK_PLL_DDR		8
-#define CLK_PLL_PERIPH0_2X	8
-
-#define CLK_AHB1		16
-
-/* All the bus gates are exported */
-
-/* The first bunch of module clocks are exported */
-
-#define CLK_DRAM		96
-
-/* All the DRAM gates are exported */
-
-/* Some more module clocks are exported */
-
-/* And the GPU module clock is exported */
-
 #define CLK_NUMBER		2
 
 #endif /* _CCU_SUN5I_A13_H_ */

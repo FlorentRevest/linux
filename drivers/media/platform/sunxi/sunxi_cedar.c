@@ -283,74 +283,6 @@ out:
 	return 0;
 }
 
-void cedardev_insert_task(struct cedarv_engine_task* new_task)
-{
-	struct cedarv_engine_task *task_entry;
-	unsigned long flags;
-	printk(KERN_NOTICE "cedar: cedardev_insert_task\n");
-
-	spin_lock_irqsave(&cedar_spin_lock, flags);
-
-	if(list_empty(&run_task_list))
-		new_task->is_first_task = 1;
-
-	/* Run_task_list traverse the list, if you insert a higher priority than the task list node in the task priority, and the current task is not inserted into the first insertion task.
-	* Then it will put a high priority task in front of the queue in the end the task taken from a high priority queuing. 
-	*/
-	/*遍历run_task_list链表，如果插入的任务优先级比链表节点中的任务优先级高，并且当前插入任务不是第一个插入的任务。
-	 *那么就将优先级高的任务放于前面，队列中的任务采取从高到底的优先级队列排队。
-	 */
-	list_for_each_entry(task_entry, &run_task_list, list) {
-		if ((task_entry->is_first_task == 0) && (task_entry->running == 0) && (task_entry->t.task_prio < new_task->t.task_prio)) {
-			break;
-		}
-	}
-
-	list_add(&new_task->list, task_entry->list.prev);
-
-#ifdef CEDAR_DEBUG
-	printk("%s,%d, TASK_ID:",__func__,__LINE__);
-	list_for_each_entry(task_entry, &run_task_list, list) {
-		printk("%d!", task_entry->t.ID);
-	}
-	printk("\n");
-#endif
-	/* Every time you insert a task, it will be the current time timer is reset to the current system jiffies */
-	/*每次插入一个任务，就将当前的计时器时间重置为系统当前的jiffies*/
-	mod_timer(&cedar_devp->cedar_engine_timer, jiffies + 0);
-
-	spin_unlock_irqrestore(&cedar_spin_lock, flags);
-}
-
-int cedardev_del_task(int task_id)
-{
-	struct cedarv_engine_task *task_entry;
-	unsigned long flags;
-	printk(KERN_NOTICE "cedar: cedardev_del_task\n");
-
-	spin_lock_irqsave(&cedar_spin_lock, flags);
-
-	/* If run_task list traverse the list to find the corresponding id number, then the task will be moved to the list run_task_list del_task_list the list header.
-	*/
-	/*遍历run_task_list链表
-	 *如果找到对应的id号，那么就将run_task_list链表中的任务移到del_task_list链表的表头。
-	 */
-	list_for_each_entry(task_entry, &run_task_list, list) {
-		if (task_entry->t.ID == task_id && task_entry->status != TASK_RELEASE) {
-			task_entry->status = TASK_RELEASE;
-
-			spin_unlock_irqrestore(&cedar_spin_lock, flags);
-			mod_timer(&cedar_devp->cedar_engine_timer, jiffies + 0);
-			return 0;
-		}
-	}
-	spin_unlock_irqrestore(&cedar_spin_lock, flags);
-
-	//No corresponding ID
-	//找不到对应 ID
-	return -1;
-}
-
 int cedardev_check_delay(int check_prio)
 {
 	struct cedarv_engine_task *task_entry;
@@ -597,7 +529,7 @@ long cedardev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			spin_unlock_irqrestore(&cedar_spin_lock, flags);
 
 			wait_event_interruptible_timeout(wait_ve, cedar_devp->irq_flag, ve_timeout*HZ);
-			//printk("%s,%d,ve_timeout:%d,cedar_devp->irq_value:%d\n", __func__, __LINE__, ve_timeout, cedar_devp->irq_value);
+			printk("%s,%d,ve_timeout:%d,cedar_devp->irq_value:%d\n", __func__, __LINE__, ve_timeout, cedar_devp->irq_value);
 			cedar_devp->irq_flag = 0;
 			/*It returns 1, indicating that the interrupt returns, returns 0, indicating timeout return*/
 			/*返回1，表示中断返回，返回0，表示timeout返回*/
@@ -850,7 +782,7 @@ static int cedardev_mmap(struct file *filp, struct vm_area_struct *vma)
 		vma->vm_flags |= VM_IO | (VM_DONTEXPAND | VM_DONTDUMP);
 
 		/* Select uncached access. */
-		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+		//vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 		if (remap_pfn_range(vma, vma->vm_start, temp_pfn,
 					vma->vm_end - vma->vm_start, vma->vm_page_prot)) {
@@ -1065,7 +997,7 @@ static int __init cedardev_init(void)
 	dram_veclk = of_clk_get_by_name(dt_node, "sdram_ve"); // dram-ve ?????
 	hosc_clk = of_clk_get_by_name(dt_node, "hosc");
 	avs_moduleclk = of_clk_get_by_name(dt_node,"avs"); // avs
-		if(clk_set_parent(avs_moduleclk, hosc_clk)){ // needed ???
+	if(clk_set_parent(avs_moduleclk, hosc_clk)){ // needed ???
 		printk("set parent of avs_moduleclk to hosc_clk failed!\n");
 		return -EFAULT;
 	}
