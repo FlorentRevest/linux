@@ -30,7 +30,7 @@
 #include "ccu-sun5i-a13.h"
 
 static SUNXI_CCU_GATE(ve_clk, "ve", "pll4",
-		      0x13c, BIT(31), 0);
+		      0x13c, BIT(31), CLK_SET_RATE_PARENT);
 
 static SUNXI_CCU_GATE(avs_clk,	"avs",	"osc24M",
 		      0x144, BIT(31), 0);
