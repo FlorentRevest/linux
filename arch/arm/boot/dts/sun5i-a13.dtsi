@@ -76,7 +76,7 @@
 
 		ve_reserved: cma {
 			compatible = "shared-dma-pool";
-			reg = <0x7800000 0x9000000>;
+			reg = <0x43d00000 0x9000000>;
 			no-map;
 			linux,cma-default;
 		};
