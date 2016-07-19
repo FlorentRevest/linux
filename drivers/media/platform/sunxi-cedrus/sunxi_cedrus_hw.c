@@ -1,0 +1,179 @@
+/*
+ * Sunxi Cedrus codec driver
+ *
+ * Copyright (C) 2016 Florent Revest
+ * Florent Revest <florent.revest@free-electrons.com>
+ *
+ * Based on vim2m
+ *
+ * Copyright (c) 2009-2010 Samsung Electronics Co., Ltd.
+ * Pawel Osciak, <pawel@osciak.com>
+ * Marek Szyprowski, <m.szyprowski@samsung.com>
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "sunxi_cedrus_common.h"
+
+#include <linux/clk.h>
+#include <linux/interrupt.h>
+#include <linux/dma-mapping.h>
+#include <linux/platform_device.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/reset.h>
+
+#include <media/v4l2-mem2mem.h>
+#include <media/videobuf2-core.h>
+
+/*
+ * Interrupt handlers.
+ */
+
+/* TODO: IRQ timeout */
+
+static irqreturn_t sunxi_cedrus_ve_irq(int irq, void *dev_id)
+{
+	struct sunxi_cedrus_dev *vpu = dev_id;
+	struct sunxi_cedrus_ctx *curr_ctx;
+	struct vb2_v4l2_buffer *src_vb, *dst_vb;
+	volatile int val;
+	unsigned long flags;
+	printk("sunxi_cedrus_ve_irq\n");
+
+	/* Disable MPEG interrupts and stop the MPEG engine */
+	val = sunxi_cedrus_read(vpu, VE_MPEG_CTRL);
+	sunxi_cedrus_write(vpu, val & (~0xf), VE_MPEG_CTRL);
+	val = sunxi_cedrus_read(vpu, VE_MPEG_STATUS);
+	sunxi_cedrus_write(vpu, 0x0000c00f, VE_MPEG_STATUS);
+	sunxi_cedrus_write(vpu, 0x00130007, VE_CTRL);
+
+	curr_ctx = v4l2_m2m_get_curr_priv(vpu->m2m_dev);
+
+	if (NULL == curr_ctx) {
+		pr_err("Instance released before the end of transaction\n");
+		return IRQ_HANDLED;
+	}
+
+	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->fh.m2m_ctx);
+	dst_vb = v4l2_m2m_dst_buf_remove(curr_ctx->fh.m2m_ctx);
+
+	/* First bit of MPEG_STATUS means success */
+	spin_lock_irqsave(&vpu->irqlock, flags);
+	if(val & 0x1) {
+		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_DONE);
+		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_DONE);
+	} else {
+		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_ERROR);
+		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_ERROR);
+	}
+	spin_unlock_irqrestore(&vpu->irqlock, flags);
+
+	v4l2_m2m_job_finish(vpu->m2m_dev, curr_ctx->fh.m2m_ctx);
+
+	return IRQ_HANDLED;
+}
+
+/*
+ * Initialization/clean-up.
+ */
+
+int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
+{
+	int irq_dec;
+	int ret;
+	unsigned long pll4clk_rate;
+	int pll4divisor;
+
+	irq_dec = platform_get_irq_byname(vpu->pdev, "ve");
+	if (irq_dec <= 0) {
+		dev_err(vpu->dev, "could not get ve IRQ\n");
+		return -ENXIO;
+	}
+	ret = devm_request_threaded_irq(vpu->dev, irq_dec, NULL,
+		sunxi_cedrus_ve_irq, IRQF_ONESHOT, dev_name(vpu->dev), vpu);
+	if (ret)
+		dev_err(vpu->dev, "could not request ve IRQ\n");
+
+	ret = of_reserved_mem_device_init(vpu->dev);
+	if (ret) {
+		dev_err(vpu->dev, "could not reserve memory\n");
+		return -ENODEV;
+	}
+
+	vpu->ve_pll4clk = devm_clk_get(vpu->dev, "ve_pll");
+	if (IS_ERR(vpu->ve_pll4clk)) {
+		dev_err(vpu->dev, "failed to get pll4\n");
+		return PTR_ERR(vpu->ve_pll4clk);
+	}
+	vpu->ahb_veclk = devm_clk_get(vpu->dev, "ahb_ve");
+	if (IS_ERR(vpu->ahb_veclk)) {
+		dev_err(vpu->dev, "failed to get ahb_ve\n");
+		return PTR_ERR(vpu->ahb_veclk);
+	}
+	vpu->ve_moduleclk = devm_clk_get(vpu->dev, "ve");
+	if (IS_ERR(vpu->ve_moduleclk)) {
+		dev_err(vpu->dev, "failed to get ve\n");
+		return PTR_ERR(vpu->ve_moduleclk);
+	}
+	vpu->dram_veclk = devm_clk_get(vpu->dev, "sdram_ve");
+	if (IS_ERR(vpu->dram_veclk)) {
+		dev_err(vpu->dev, "failed to get sdram_ve\n");
+		return PTR_ERR(vpu->dram_veclk);
+	}
+
+	if(clk_set_parent(vpu->ve_moduleclk, vpu->ve_pll4clk)){
+		dev_err(vpu->dev, "clk_set_parent of ve to pll4 failed\n");
+		return -EFAULT;
+	}
+
+	pll4clk_rate = clk_get_rate(vpu->ve_pll4clk);
+	pll4divisor = pll4clk_rate / 320000000;
+
+	if (pll4divisor == 0)
+		pll4divisor = 1;
+	else if (pll4clk_rate / pll4divisor < 100000000 && pll4divisor > 1)
+		pll4divisor--;
+	else if (pll4clk_rate / pll4divisor > 320000000)
+		pll4divisor++;
+	if (pll4divisor > 8)
+		pll4divisor = 8;
+	if (clk_set_rate(vpu->ve_moduleclk, pll4clk_rate / pll4divisor) == -1){
+		dev_err(vpu->dev, "could not set ve clock\n");
+		return -EFAULT;
+	}
+
+	vpu->rstc = devm_reset_control_get(vpu->dev, "ve");
+
+	vpu->base = ioremap(MACC_REGS_BASE, 4096);
+	if (!vpu->base)
+		dev_err(vpu->dev, "could not maps MACC registers\n");
+
+	clk_prepare_enable(vpu->ahb_veclk);
+	clk_prepare_enable(vpu->ve_moduleclk);
+	clk_prepare_enable(vpu->dram_veclk); /* TODO: disable if fails */
+
+	reset_control_assert(vpu->rstc);
+	reset_control_deassert(vpu->rstc);
+
+	sunxi_cedrus_write(vpu, 0x00130007, VE_CTRL);
+
+	return 0;
+}
+
+void sunxi_cedrus_hw_remove(struct sunxi_cedrus_dev *vpu)
+{
+	clk_disable_unprepare(vpu->dram_veclk);
+	clk_disable_unprepare(vpu->ve_moduleclk);
+	clk_disable_unprepare(vpu->ahb_veclk);
+	clk_disable_unprepare(vpu->ve_pll4clk);
+
+	of_reserved_mem_device_release(vpu->dev);
+}
+
