@@ -36,8 +36,8 @@
 #define SUNXI_CEDRUS_CAPTURE	(1 << 0)
 #define SUNXI_CEDRUS_OUTPUT	(1 << 1)
 
-#define SUNXI_CEDRUS_MIN_WIDTH 32U
-#define SUNXI_CEDRUS_MIN_HEIGHT 32U
+#define SUNXI_CEDRUS_MIN_WIDTH 16U
+#define SUNXI_CEDRUS_MIN_HEIGHT 16U
 #define SUNXI_CEDRUS_MAX_WIDTH 3840U
 #define SUNXI_CEDRUS_MAX_HEIGHT 2160U
 
@@ -172,8 +172,7 @@ static int device_process(struct sunxi_cedrus_ctx *ctx,
 	pic_header |= ((frame_hdr->q_scale_type & 0x1) << 4);
 	pic_header |= ((frame_hdr->intra_vlc_format & 0x1) << 3);
 	pic_header |= ((frame_hdr->alternate_scan & 0x1) << 2);
-	pic_header |= ((frame_hdr->full_pel_forward_vector & 0x1) << 1);
-	pic_header |= ((frame_hdr->full_pel_backward_vector & 0x1) << 0);
+	pic_header |= ((0 & 0x3) << 0);
 	sunxi_cedrus_write(dev, pic_header, VE_MPEG_PIC_HDR);
 
 	sunxi_cedrus_write(dev, 0x00000000, VE_MPEG_MBA);
@@ -193,14 +192,14 @@ static int device_process(struct sunxi_cedrus_ctx *ctx,
 	sunxi_cedrus_write(dev, output_chroma - PHYS_OFFSET, VE_MPEG_ROT_CHROMA);
 
 	/* set input offset in bits */
-	sunxi_cedrus_write(dev, (frame_hdr->pos - 4) * 8, VE_MPEG_VLD_OFFSET);
+	sunxi_cedrus_write(dev, frame_hdr->slice_pos * 8, VE_MPEG_VLD_OFFSET);
 
 	/* set input length in bits (+ little bit more, else it fails sometimes ??) */
-	sunxi_cedrus_write(dev, (frame_hdr->len - (frame_hdr->pos - 4) + 16) * 8, VE_MPEG_VLD_LEN);
+	sunxi_cedrus_write(dev, (frame_hdr->slice_len - frame_hdr->slice_pos) * 8, VE_MPEG_VLD_LEN);
 
 	/* Input beginning and end */
-	sunxi_cedrus_write(dev, (input_buffer - PHYS_OFFSET) | 0x50000000, VE_MPEG_VLD_ADDR);
-	sunxi_cedrus_write(dev, (input_buffer - PHYS_OFFSET) + roundup(frame_hdr->len, 65536) -1, VE_MPEG_VLD_END);
+	sunxi_cedrus_write(dev, ((input_buffer - PHYS_OFFSET) & 0x0ffffff0) | ((input_buffer - PHYS_OFFSET) >> 28) | (0x7 << 28), VE_MPEG_VLD_ADDR);
+	sunxi_cedrus_write(dev, (input_buffer - PHYS_OFFSET) + 1024*1024 -1, VE_MPEG_VLD_END);
 
 	/* Starts the MPEG engine */
 	sunxi_cedrus_write(dev, (frame_hdr->type ? 0x02000000 : 0x01000000) | 0x8000000f, VE_MPEG_TRIGGER);

@@ -977,19 +977,14 @@ enum v4l2_detect_md_mode {
 #define V4L2_CID_DETECT_MD_REGION_GRID		(V4L2_CID_DETECT_CLASS_BASE + 4)
 
 struct v4l2_ctrl_ve_frame_hdr {
-	const uint8_t *data;
-	__u32 len;
-	__u32 pos;
-	__u32 gop;
+	__u32 slice_len;
+	__u32 slice_pos;
 	enum { MPEG1, MPEG2 } type;
 
 	__u16 width;
 	__u16 height;
 
-	__u16 temporal_reference;
 	enum { PCT_I = 1, PCT_P, PCT_B, PCT_D } picture_coding_type;
-	__u8 full_pel_forward_vector;
-	__u8 full_pel_backward_vector;
 	__u8 f_code[2][2];
 
 	__u8 intra_dc_precision;
