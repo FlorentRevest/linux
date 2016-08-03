@@ -230,14 +230,10 @@ void device_run(void *priv)
 	struct sunxi_cedrus_ctx *ctx = priv;
 	struct vb2_v4l2_buffer *src_buf, *dst_buf;
 
-	// TODO: v4l2_ctrl_apply_request(&ctx->ctrl_handler, src->request);
-	/* if (ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_VP8_FRAME) {
-		ctx->run.vp8d.frame_hdr = get_ctrl_ptr(ctx,
-				ROCKCHIP_VPU_DEC_CTRL_VP8_FRAME_HDR);
-	} */
-
 	src_buf = v4l2_m2m_next_src_buf(ctx->fh.m2m_ctx);
 	dst_buf = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
+
+	v4l2_ctrl_apply_request(&ctx->hdl, src_buf->request);
 
 	device_process(ctx, src_buf, dst_buf);
 }
@@ -648,6 +644,7 @@ int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	src_vq->mem_ops = &vb2_dma_contig_memops;
 	src_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	src_vq->lock = &ctx->dev->dev_mutex;
+	src_vq->v4l2_allow_requests = true;
 
 	ret = vb2_queue_init(src_vq);
 	if (ret)
@@ -661,7 +658,7 @@ int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	dst_vq->mem_ops = &vb2_dma_contig_memops;
 	dst_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	dst_vq->lock = &ctx->dev->dev_mutex;
-	src_vq->v4l2_allow_requests = true;
+	dst_vq->v4l2_allow_requests = true;
 
 	return vb2_queue_init(dst_vq);
 }

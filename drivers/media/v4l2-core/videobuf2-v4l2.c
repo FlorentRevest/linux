@@ -439,6 +439,8 @@ static int __fill_vb2_buffer(struct vb2_buffer *vb,
 		vbuf->flags &= ~V4L2_BUFFER_OUT_FLAGS;
 	}
 
+	vbuf->request = b->request;
+
 	return 0;
 }
 
