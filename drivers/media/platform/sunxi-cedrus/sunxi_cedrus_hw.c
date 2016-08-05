@@ -88,8 +88,6 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 {
 	int irq_dec;
 	int ret;
-	unsigned long pll4clk_rate;
-	int pll4divisor;
 
 	irq_dec = platform_get_irq_byname(vpu->pdev, "ve");
 	if (irq_dec <= 0) {
@@ -133,18 +131,7 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 		return -EFAULT;
 	}
 
-	pll4clk_rate = clk_get_rate(vpu->ve_pll4clk);
-	pll4divisor = pll4clk_rate / 320000000;
-
-	if (pll4divisor == 0)
-		pll4divisor = 1;
-	else if (pll4clk_rate / pll4divisor < 100000000 && pll4divisor > 1)
-		pll4divisor--;
-	else if (pll4clk_rate / pll4divisor > 320000000)
-		pll4divisor++;
-	if (pll4divisor > 8)
-		pll4divisor = 8;
-	if (clk_set_rate(vpu->ve_moduleclk, pll4clk_rate / pll4divisor) == -1){
+	if (clk_set_rate(vpu->ve_moduleclk, 320000000) == -1){
 		dev_err(vpu->dev, "could not set ve clock\n");
 		return -EFAULT;
 	}
