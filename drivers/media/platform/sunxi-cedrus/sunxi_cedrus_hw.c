@@ -98,8 +98,10 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 	}
 	ret = devm_request_irq(vpu->dev, irq_dec, sunxi_cedrus_ve_irq, 0,
 			dev_name(vpu->dev), vpu);
-	if (ret)
+	if (ret) {
 		dev_err(vpu->dev, "could not request ve IRQ\n");
+		return -ENXIO;
+	}
 
 	ret = of_reserved_mem_device_init(vpu->dev);
 	if (ret) {
@@ -107,11 +109,6 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 		return -ENODEV;
 	}
 
-	vpu->ve_pll4clk = devm_clk_get(vpu->dev, "ve_pll");
-	if (IS_ERR(vpu->ve_pll4clk)) {
-		dev_err(vpu->dev, "failed to get pll4\n");
-		return PTR_ERR(vpu->ve_pll4clk);
-	}
 	vpu->ahb_veclk = devm_clk_get(vpu->dev, "ahb_ve");
 	if (IS_ERR(vpu->ahb_veclk)) {
 		dev_err(vpu->dev, "failed to get ahb_ve\n");
@@ -127,13 +124,8 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 		dev_err(vpu->dev, "failed to get sdram_ve\n");
 		return PTR_ERR(vpu->dram_veclk);
 	}
-
-	if(clk_set_parent(vpu->ve_moduleclk, vpu->ve_pll4clk)){
-		dev_err(vpu->dev, "clk_set_parent of ve to pll4 failed\n");
-		return -EFAULT;
-	}
-
-	if (clk_set_rate(vpu->ve_moduleclk, 320000000) == -1){
+	ret = clk_set_rate(vpu->ve_moduleclk, 320000000);
+	if (ret == -1){
 		dev_err(vpu->dev, "could not set ve clock\n");
 		return -EFAULT;
 	}
@@ -144,9 +136,24 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 	if (!vpu->base)
 		dev_err(vpu->dev, "could not maps MACC registers\n");
 
-	clk_prepare_enable(vpu->ahb_veclk);
-	clk_prepare_enable(vpu->ve_moduleclk);
-	clk_prepare_enable(vpu->dram_veclk); /* TODO: disable if fails */
+	ret = clk_prepare_enable(vpu->ahb_veclk);
+	if(ret) {
+		dev_err(vpu->dev, "could not enable ahb ve clock\n");
+		return -EFAULT;
+	}
+	ret = clk_prepare_enable(vpu->ve_moduleclk);
+	if(ret) {
+		clk_disable_unprepare(vpu->ahb_veclk);
+		dev_err(vpu->dev, "could not enable ve clock\n");
+		return -EFAULT;
+	}
+	ret = clk_prepare_enable(vpu->dram_veclk);
+	if(ret) {
+		clk_disable_unprepare(vpu->ve_moduleclk);
+		clk_disable_unprepare(vpu->ahb_veclk);
+		dev_err(vpu->dev, "could not enable dram ve clock\n");
+		return -EFAULT;
+	}
 
 	reset_control_assert(vpu->rstc);
 	reset_control_deassert(vpu->rstc);
@@ -161,7 +168,6 @@ void sunxi_cedrus_hw_remove(struct sunxi_cedrus_dev *vpu)
 	clk_disable_unprepare(vpu->dram_veclk);
 	clk_disable_unprepare(vpu->ve_moduleclk);
 	clk_disable_unprepare(vpu->ahb_veclk);
-	clk_disable_unprepare(vpu->ve_pll4clk);
 
 	of_reserved_mem_device_release(vpu->dev);
 }

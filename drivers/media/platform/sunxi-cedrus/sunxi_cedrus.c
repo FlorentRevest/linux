@@ -270,7 +270,6 @@ static int sunxi_cedrus_suspend(struct device *dev)
 	clk_disable(vpu->dram_veclk);
 	clk_disable(vpu->ve_moduleclk);
 	clk_disable(vpu->ahb_veclk);
-	clk_disable(vpu->ve_pll4clk);
 
 	return 0;
 }
@@ -282,7 +281,6 @@ static int sunxi_cedrus_resume(struct device *dev)
 	clk_enable(vpu->dram_veclk);
 	clk_enable(vpu->ve_moduleclk);
 	clk_enable(vpu->ahb_veclk);
-	clk_enable(vpu->ve_pll4clk);
 
 	return 0;
 }

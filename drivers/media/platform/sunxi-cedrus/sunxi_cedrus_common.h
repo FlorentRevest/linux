@@ -47,7 +47,6 @@ struct sunxi_cedrus_dev {
 	void *alloc_ctx;
 
 	struct clk *ve_moduleclk;
-	struct clk *ve_pll4clk;
 	struct clk *ahb_veclk;
 	struct clk *dram_veclk;
 
