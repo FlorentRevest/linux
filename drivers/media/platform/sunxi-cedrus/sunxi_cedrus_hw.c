@@ -45,7 +45,6 @@ static irqreturn_t sunxi_cedrus_ve_irq(int irq, void *dev_id)
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
 	volatile int val;
 	unsigned long flags;
-	printk("sunxi_cedrus_ve_irq\n");
 
 	/* Disable MPEG interrupts and stop the MPEG engine */
 	val = sunxi_cedrus_read(vpu, VE_MPEG_CTRL);
