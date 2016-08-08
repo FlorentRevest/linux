@@ -93,8 +93,8 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 		dev_err(vpu->dev, "could not get ve IRQ\n");
 		return -ENXIO;
 	}
-	ret = devm_request_threaded_irq(vpu->dev, irq_dec, NULL,
-		sunxi_cedrus_ve_irq, IRQF_ONESHOT, dev_name(vpu->dev), vpu);
+	ret = devm_request_irq(vpu->dev, irq_dec, sunxi_cedrus_ve_irq, 0,
+			dev_name(vpu->dev), vpu);
 	if (ret)
 		dev_err(vpu->dev, "could not request ve IRQ\n");
 
