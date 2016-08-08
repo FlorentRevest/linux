@@ -155,7 +155,7 @@ static const struct v4l2_file_operations sunxi_cedrus_fops = {
 	.owner		= THIS_MODULE,
 	.open		= sunxi_cedrus_open,
 	.release	= sunxi_cedrus_release,
-	.poll		= v4l2_m2m_fop_poll, /* TODO: doesn't seem to work */
+	.poll		= v4l2_m2m_fop_poll,
 	.unlocked_ioctl	= video_ioctl2,
 	.mmap		= v4l2_m2m_fop_mmap,
 };
@@ -171,7 +171,6 @@ static struct video_device sunxi_cedrus_viddev = {
 
 static struct v4l2_m2m_ops m2m_ops = {
 	.device_run	= device_run,
-	.job_ready	= job_ready,
 	.job_abort	= job_abort,
 };
 
@@ -222,7 +221,6 @@ static int sunxi_cedrus_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dev);
 
-	/* TODO: replace by something else? job_ready & job_abort are empty */
 	dev->m2m_dev = v4l2_m2m_init(&m2m_ops);
 	if (IS_ERR(dev->m2m_dev)) {
 		v4l2_err(&dev->v4l2_dev, "Failed to init mem2mem device\n");

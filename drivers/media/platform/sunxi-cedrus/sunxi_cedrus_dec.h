@@ -25,7 +25,6 @@
 
 int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq);
 
-int job_ready(void *priv);
 void job_abort(void *priv);
 void device_run(void *priv);
 

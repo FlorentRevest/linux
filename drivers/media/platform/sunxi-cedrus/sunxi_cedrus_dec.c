@@ -210,23 +210,15 @@ static int device_process(struct sunxi_cedrus_ctx *ctx,
 	return 0;
 }
 
-/**
- * job_ready() - check whether an instance is ready to be scheduled to run
+/*
+ * mem2mem callbacks
  */
-int job_ready(void *priv)
-{
-	return 1;
-}
 
 void job_abort(void *priv)
-{
-}
+{}
 
-/* device_run() - prepares and starts the device
- *
- * This simulates all the immediate preparations required before starting
- * a device. This will be called by the framework when it decides to schedule
- * a particular instance.
+/* 
+ * device_run() - prepares and starts the device
  */
 void device_run(void *priv)
 {
