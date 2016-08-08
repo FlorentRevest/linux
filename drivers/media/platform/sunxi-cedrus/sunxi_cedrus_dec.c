@@ -10,6 +10,9 @@
  * Pawel Osciak, <pawel@osciak.com>
  * Marek Szyprowski, <m.szyprowski@samsung.com>
  *
+ * And reverse engineering efforts of the 'Cedrus' project
+ * Copyright (c) 2013-2014 Jens Kuske <jenskuske@gmail.com>
+ *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
  * may be copied, distributed, and modified under those terms.
