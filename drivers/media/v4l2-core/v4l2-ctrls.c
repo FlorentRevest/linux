@@ -760,7 +760,8 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER:		return "Repeat Sequence Header";
 	case V4L2_CID_MPEG_VIDEO_FORCE_KEY_FRAME:		return "Force Key Frame";
 
-	case V4L2_CID_MPEG_VIDEO_VE_FRAME_HDR:			return "VE Frame Header";
+	case V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR:		return "MPEG2 Frame Header";
+	case V4L2_CID_MPEG_VIDEO_MPEG4_FRAME_HDR:		return "MPEG4 Frame Header";
 
 	/* VPX controls */
 	case V4L2_CID_MPEG_VIDEO_VPX_NUM_PARTITIONS:		return "VPX Number of Partitions";
@@ -1145,8 +1146,11 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_RDS_TX_ALT_FREQS:
 		*type = V4L2_CTRL_TYPE_U32;
 		break;
-	case V4L2_CID_MPEG_VIDEO_VE_FRAME_HDR: // TODO: PROPER NAME????
-		*type = V4L2_CTRL_TYPE_VE_FRAME_HDR;
+	case V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR:
+		*type = V4L2_CTRL_TYPE_MPEG2_FRAME_HDR;
+		break;
+	case V4L2_CID_MPEG_VIDEO_MPEG4_FRAME_HDR:
+		*type = V4L2_CTRL_TYPE_MPEG4_FRAME_HDR;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
@@ -1552,7 +1556,8 @@ static int std_validate(const struct v4l2_ctrl *ctrl, u32 idx,
 	case V4L2_CTRL_TYPE_PRIVATE:
 		return 0;
 
-	case V4L2_CTRL_TYPE_VE_FRAME_HDR:
+	case V4L2_CTRL_TYPE_MPEG2_FRAME_HDR:
+	case V4L2_CTRL_TYPE_MPEG4_FRAME_HDR:
 	default:
 		return -EINVAL;
 	}
@@ -2102,8 +2107,11 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 	case V4L2_CTRL_TYPE_U32:
 		elem_size = sizeof(u32);
 		break;
-	case V4L2_CTRL_TYPE_VE_FRAME_HDR:
-		elem_size = sizeof(struct v4l2_ctrl_ve_frame_hdr);
+	case V4L2_CTRL_TYPE_MPEG2_FRAME_HDR:
+		elem_size = sizeof(struct v4l2_ctrl_mpeg2_frame_hdr);
+		break;
+	case V4L2_CTRL_TYPE_MPEG4_FRAME_HDR:
+		elem_size = sizeof(struct v4l2_ctrl_mpeg4_frame_hdr);
 		break;
 	default:
 		if (type < V4L2_CTRL_COMPOUND_TYPES)

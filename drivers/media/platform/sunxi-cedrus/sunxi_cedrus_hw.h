@@ -29,4 +29,9 @@ struct sunxi_cedrus_ctx;
 int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu);
 void sunxi_cedrus_hw_remove(struct sunxi_cedrus_dev *vpu);
 
+void process_mpeg2(struct sunxi_cedrus_ctx *ctx, struct vb2_v4l2_buffer *in_vb,
+			  struct vb2_v4l2_buffer *out_vb);
+void process_mpeg4(struct sunxi_cedrus_ctx *ctx, struct vb2_v4l2_buffer *in_vb,
+			  struct vb2_v4l2_buffer *out_vb);
+
 #endif /* SUNXI_CEDRUS_HW_H_ */
