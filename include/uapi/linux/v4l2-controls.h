@@ -549,6 +549,7 @@ enum v4l2_mpeg_video_mpeg4_profile {
 
 #define V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR               (V4L2_CID_MPEG_BASE+450)
 #define V4L2_CID_MPEG_VIDEO_MPEG4_FRAME_HDR               (V4L2_CID_MPEG_BASE+451)
+#define V4L2_CID_MPEG_VIDEO_H264_FRAME_HDR                (V4L2_CID_MPEG_BASE+452)
 
 /*  Control IDs for VP8 streams
  *  Although VP8 is not part of MPEG we add these controls to the MPEG class
@@ -1038,6 +1039,17 @@ struct v4l2_ctrl_mpeg4_frame_hdr {
 
 	short trb;
 	short trd;
+
+	__u8 backward_index;
+	__u8 forward_index;
+};
+
+struct v4l2_ctrl_h264_frame_hdr {
+	__u32 slice_len;
+	__u32 slice_pos;
+
+	__u16 width;
+	__u16 height;
 
 	__u8 backward_index;
 	__u8 forward_index;

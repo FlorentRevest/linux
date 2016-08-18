@@ -54,6 +54,7 @@ static int sunxi_cedrus_s_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id) {
 	case V4L2_CID_MPEG_VIDEO_MPEG4_FRAME_HDR:
 	case V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR:
+	case V4L2_CID_MPEG_VIDEO_H264_FRAME_HDR:
 		/* This is kept in memory and used directly. */
 		break;
 	default:
@@ -84,6 +85,15 @@ static const struct v4l2_ctrl_config sunxi_cedrus_ctrl_mpeg4_frame_hdr = {
 	.name = "MPEG4 Frame Header Parameters",
 	.max_reqs = VIDEO_MAX_FRAME,
 	.elem_size = sizeof(struct v4l2_ctrl_mpeg4_frame_hdr),
+};
+
+static const struct v4l2_ctrl_config sunxi_cedrus_ctrl_h264_frame_hdr = {
+	.ops = &sunxi_cedrus_ctrl_ops,
+	.id = V4L2_CID_MPEG_VIDEO_H264_FRAME_HDR,
+	.type = V4L2_CTRL_TYPE_PRIVATE,
+	.name = "H264 Frame Header Parameters",
+	.max_reqs = VIDEO_MAX_FRAME,
+	.elem_size = sizeof(struct v4l2_ctrl_h264_frame_hdr),
 };
 
 /*
@@ -117,6 +127,10 @@ static int sunxi_cedrus_open(struct file *file)
 	ctx->mpeg4_frame_hdr_ctrl = v4l2_ctrl_new_custom(hdl,
 			&sunxi_cedrus_ctrl_mpeg4_frame_hdr, NULL);
 	ctx->mpeg4_frame_hdr_ctrl->flags |= V4L2_CTRL_FLAG_REQ_KEEP;
+
+	ctx->h264_frame_hdr_ctrl = v4l2_ctrl_new_custom(hdl,
+			&sunxi_cedrus_ctrl_h264_frame_hdr, NULL);
+	ctx->h264_frame_hdr_ctrl->flags |= V4L2_CTRL_FLAG_REQ_KEEP;
 
 	if (hdl->error) {
 		rc = hdl->error;
@@ -159,6 +173,7 @@ static int sunxi_cedrus_release(struct file *file)
 	v4l2_ctrl_handler_free(&ctx->hdl);
 	ctx->mpeg2_frame_hdr_ctrl = NULL;
 	ctx->mpeg4_frame_hdr_ctrl = NULL;
+	ctx->h264_frame_hdr_ctrl = NULL;
 	mutex_lock(&dev->dev_mutex);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	mutex_unlock(&dev->dev_mutex);

@@ -85,6 +85,7 @@ struct sunxi_cedrus_ctx {
 
 	struct v4l2_ctrl *mpeg2_frame_hdr_ctrl;
 	struct v4l2_ctrl *mpeg4_frame_hdr_ctrl;
+	struct v4l2_ctrl *h264_frame_hdr_ctrl;
 };
 
 static inline void sunxi_cedrus_write(struct sunxi_cedrus_dev *vpu,

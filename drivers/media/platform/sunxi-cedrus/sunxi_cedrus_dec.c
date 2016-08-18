@@ -58,6 +58,11 @@ static struct sunxi_cedrus_fmt formats[] = {
 		.types	= SUNXI_CEDRUS_OUTPUT,
 		.num_planes = 1,
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_H264_FRAME,
+		.types	= SUNXI_CEDRUS_OUTPUT,
+		.num_planes = 1,
+	},
 };
 
 #define NUM_FORMATS ARRAY_SIZE(formats)
@@ -113,6 +118,8 @@ void device_run(void *priv)
 		process_mpeg2(ctx, src_buf, dst_buf);
 	else if(ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG4_FRAME)
 		process_mpeg4(ctx, src_buf, dst_buf);
+	else if(ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_H264_FRAME)
+		process_h264(ctx, src_buf, dst_buf);
 	else {
 		v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_ERROR);
 		v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_ERROR);

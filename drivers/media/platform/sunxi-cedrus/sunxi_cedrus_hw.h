@@ -33,5 +33,7 @@ void process_mpeg2(struct sunxi_cedrus_ctx *ctx, struct vb2_v4l2_buffer *in_vb,
 			  struct vb2_v4l2_buffer *out_vb);
 void process_mpeg4(struct sunxi_cedrus_ctx *ctx, struct vb2_v4l2_buffer *in_vb,
 			  struct vb2_v4l2_buffer *out_vb);
+void process_h264(struct sunxi_cedrus_ctx *ctx, struct vb2_v4l2_buffer *in_vb,
+			  struct vb2_v4l2_buffer *out_vb);
 
 #endif /* SUNXI_CEDRUS_HW_H_ */
