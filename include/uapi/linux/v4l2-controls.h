@@ -1023,6 +1023,7 @@ struct v4l2_ctrl_mpeg4_frame_hdr {
             unsigned int resync_marker_disable		: 1;
         } vol_fields;
 
+	unsigned char quant_precision;
 	struct {
             unsigned int vop_coding_type		: 2;
             unsigned int backward_reference_vop_coding_type	: 2;

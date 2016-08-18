@@ -64,29 +64,15 @@ void process_mpeg4(struct sunxi_cedrus_ctx *ctx,
 		 V4L2_BUF_FLAG_BFRAME |
 		 V4L2_BUF_FLAG_TSTAMP_SRC_MASK);
 
-	printk("process_mpeg4\n");
-
 	if (!frame_hdr->vol_fields.resync_marker_disable)
 	{
 		v4l2_err(&dev->v4l2_dev, "Can not decode VOPs with resync markers");
 		return;
 	}
 
-	/* TODO: is that needded ?
-	while (find_startcode(&bs))
-	{
-		if (get_bits(&bs, 8) != 0xb6)
-			continue;
-
-		vop_header hdr;
-		if (!decode_vop_header(&bs, info, &hdr))
-			continue;
-        */
-
 	/* Activates MPEG engine */
 	sunxi_cedrus_write(dev, 0x00130000 | (VE_ENGINE_MPEG & 0xf), VE_CTRL);
 
-	/* TODO: allocate those three buffers */
 	sunxi_cedrus_write(dev, dev->mbh_buffer  - PHYS_OFFSET, VE_MPEG_MBH_ADDR);
 	sunxi_cedrus_write(dev, dev->dcac_buffer - PHYS_OFFSET, VE_MPEG_DCAC_ADDR);
 	sunxi_cedrus_write(dev, dev->ncf_buffer  - PHYS_OFFSET, VE_MPEG_NCF_ADDR);
@@ -116,16 +102,16 @@ void process_mpeg4(struct sunxi_cedrus_ctx *ctx,
 
 	// set size
 	sunxi_cedrus_write(dev, (((width + 1) & ~0x1) << 16) | (width << 8) | height, VE_MPEG_SIZE);
+
 	sunxi_cedrus_write(dev, ((width * 16) << 16) | (height * 16), VE_MPEG_FRAME_SIZE);
 
 	sunxi_cedrus_write(dev, 0x0, VE_MPEG_MBA);
-	sunxi_cedrus_write(dev, 0xffffffff, VE_MPEG_STATUS);
 
 	// enable interrupt, unknown control flags
-	sunxi_cedrus_write(dev, 0x80084118 | ((0x1 << 7) | ((frame_hdr->vop_fields.vop_coding_type == VOP_P ? 0x1 : 0x0) << 12)), VE_MPEG_CTRL);
+	sunxi_cedrus_write(dev, 0x80084118 | (0x1 << 7) | ((frame_hdr->vop_fields.vop_coding_type == VOP_P ? 0x1 : 0x0) << 12), VE_MPEG_CTRL);
 
 	// set quantization parameter
-	sunxi_cedrus_write(dev, 0x0, VE_MPEG_QP_INPUT); // TODO: vop_quant ?
+	sunxi_cedrus_write(dev, frame_hdr->quant_precision, VE_MPEG_QP_INPUT);
 
 	// set forward/backward predicion buffers
 	sunxi_cedrus_write(dev, forward_luma    - PHYS_OFFSET, VE_MPEG_FWD_LUMA);
@@ -141,15 +127,17 @@ void process_mpeg4(struct sunxi_cedrus_ctx *ctx,
 		sunxi_cedrus_write(dev, 0x0, VE_MPEG_TRBTRD_FIELD); // TODO: is that right ?
 	}
 
+	sunxi_cedrus_write(dev, 0xffffffff, VE_MPEG_STATUS);
+
 	// set input offset in bits
-	sunxi_cedrus_write(dev, frame_hdr->slice_pos, VE_MPEG_VLD_OFFSET); // TODO: is that right ?
+	sunxi_cedrus_write(dev, frame_hdr->slice_pos * 8, VE_MPEG_VLD_OFFSET);
 
 	// set input length in bits
-	sunxi_cedrus_write(dev, frame_hdr->slice_len * 8 - frame_hdr->slice_pos, VE_MPEG_VLD_LEN); // TODO: is that right ?
+	sunxi_cedrus_write(dev, (frame_hdr->slice_len - frame_hdr->slice_pos) * 8, VE_MPEG_VLD_LEN);
 
 	/* Input beginning and end */
-	sunxi_cedrus_write(dev, (input_buffer & 0x0ffffff0) | (input_buffer >> 28) | (0x7 << 28), VE_MPEG_VLD_ADDR); // TODO: is that right ?
-	sunxi_cedrus_write(dev, input_buffer + (1024 * 1024) - 1, VE_MPEG_VLD_END);
+	sunxi_cedrus_write(dev, ((input_buffer - PHYS_OFFSET) & 0x0ffffff0) | ((input_buffer - PHYS_OFFSET) >> 28) | (0x7 << 28), VE_MPEG_VLD_ADDR);
+	sunxi_cedrus_write(dev, (input_buffer - PHYS_OFFSET) + 1024*1024 - 1, VE_MPEG_VLD_END);
 
 	/* Starts the MPEG engine */
 	sunxi_cedrus_write(dev, 0x8400000d | ((width * height) << 8), VE_MPEG_TRIGGER);

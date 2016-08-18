@@ -281,14 +281,38 @@ static int vidioc_try_fmt_vid_out(struct file *file, void *priv,
 
 static int vidioc_s_fmt(struct sunxi_cedrus_ctx *ctx, struct v4l2_format *f)
 {
+	struct sunxi_cedrus_dev *dev = ctx->dev;
 	struct v4l2_pix_format_mplane *pix_fmt_mp = &f->fmt.pix_mp;
 	struct sunxi_cedrus_fmt *fmt;
 	int i, ret = 0;
 
 	switch (f->type) {
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		if(ctx->vpu_src_fmt && ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG4_FRAME
+				&& dev->mbh_buffer_virt) {
+			int width = ctx->src_fmt.width;
+			int height = ctx->src_fmt.height;
+			dma_free_coherent(dev->dev, height*2048,
+					dev->mbh_buffer_virt, dev->mbh_buffer);
+			dma_free_coherent(dev->dev, width*height*2,
+					dev->dcac_buffer_virt, dev->dcac_buffer);
+			dma_free_coherent(dev->dev, 4*1024,
+					dev->ncf_buffer_virt, dev->ncf_buffer);
+		}
+
 		ctx->vpu_src_fmt = find_format(f);
 		ctx->src_fmt = *pix_fmt_mp;
+
+		if(ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG4_FRAME) {
+			int width = pix_fmt_mp->width;
+			int height = pix_fmt_mp->height;
+			dev->mbh_buffer_virt = dma_alloc_coherent(dev->dev,
+					height*2048, &dev->mbh_buffer, GFP_KERNEL);
+			dev->dcac_buffer_virt = dma_alloc_coherent(dev->dev,
+					width*height*2, &dev->dcac_buffer, GFP_KERNEL);
+			dev->ncf_buffer_virt = dma_alloc_coherent(dev->dev,
+					4*1024, &dev->ncf_buffer, GFP_KERNEL);
+		}
 		break;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 		fmt = find_format(f);

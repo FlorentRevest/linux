@@ -57,6 +57,10 @@ struct sunxi_cedrus_dev {
 	unsigned int mbh_buffer;
 	unsigned int dcac_buffer;
 	unsigned int ncf_buffer;
+
+	void *mbh_buffer_virt;
+	void *dcac_buffer_virt;
+	void *ncf_buffer_virt;
 };
 
 struct sunxi_cedrus_fmt {
