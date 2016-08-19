@@ -1006,6 +1006,7 @@ struct v4l2_ctrl_mpeg2_frame_hdr {
 struct v4l2_ctrl_mpeg4_frame_hdr {
 	__u32 slice_len;
 	__u32 slice_pos;
+	unsigned char quant_scale;
 
 	__u16 width;
 	__u16 height;
@@ -1024,7 +1025,6 @@ struct v4l2_ctrl_mpeg4_frame_hdr {
             unsigned int resync_marker_disable		: 1;
         } vol_fields;
 
-	unsigned char quant_precision;
 	struct {
             unsigned int vop_coding_type		: 2;
             unsigned int backward_reference_vop_coding_type	: 2;

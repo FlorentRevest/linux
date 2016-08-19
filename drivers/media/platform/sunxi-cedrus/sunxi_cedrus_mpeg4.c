@@ -111,7 +111,7 @@ void process_mpeg4(struct sunxi_cedrus_ctx *ctx,
 	sunxi_cedrus_write(dev, 0x80084118 | (0x1 << 7) | ((frame_hdr->vop_fields.vop_coding_type == VOP_P ? 0x1 : 0x0) << 12), VE_MPEG_CTRL);
 
 	// set quantization parameter
-	sunxi_cedrus_write(dev, frame_hdr->quant_precision, VE_MPEG_QP_INPUT);
+	sunxi_cedrus_write(dev, frame_hdr->quant_scale, VE_MPEG_QP_INPUT);
 
 	// set forward/backward predicion buffers
 	sunxi_cedrus_write(dev, forward_luma    - PHYS_OFFSET, VE_MPEG_FWD_LUMA);
