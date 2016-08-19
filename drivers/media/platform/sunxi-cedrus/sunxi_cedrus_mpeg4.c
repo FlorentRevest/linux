@@ -130,10 +130,10 @@ void process_mpeg4(struct sunxi_cedrus_ctx *ctx,
 	sunxi_cedrus_write(dev, 0xffffffff, VE_MPEG_STATUS);
 
 	// set input offset in bits
-	sunxi_cedrus_write(dev, frame_hdr->slice_pos * 8, VE_MPEG_VLD_OFFSET);
+	sunxi_cedrus_write(dev, frame_hdr->slice_pos, VE_MPEG_VLD_OFFSET);
 
 	// set input length in bits
-	sunxi_cedrus_write(dev, (frame_hdr->slice_len - frame_hdr->slice_pos) * 8, VE_MPEG_VLD_LEN);
+	sunxi_cedrus_write(dev, frame_hdr->slice_len - frame_hdr->slice_pos, VE_MPEG_VLD_LEN);
 
 	/* Input beginning and end */
 	sunxi_cedrus_write(dev, ((input_buffer - PHYS_OFFSET) & 0x0ffffff0) | ((input_buffer - PHYS_OFFSET) >> 28) | (0x7 << 28), VE_MPEG_VLD_ADDR);
