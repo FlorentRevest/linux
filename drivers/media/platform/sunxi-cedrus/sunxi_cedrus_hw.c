@@ -158,8 +158,6 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 	reset_control_assert(vpu->rstc);
 	reset_control_deassert(vpu->rstc);
 
-	sunxi_cedrus_write(vpu, 0x00130007, VE_CTRL);
-
 	return 0;
 }
 
