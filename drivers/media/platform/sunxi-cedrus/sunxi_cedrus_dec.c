@@ -28,6 +28,7 @@
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-event.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/reset.h>
 
 #include "sunxi_cedrus_dec.h"
 #include "sunxi_cedrus_hw.h"
@@ -295,6 +296,9 @@ static int vidioc_s_fmt(struct sunxi_cedrus_ctx *ctx, struct v4l2_format *f)
 
 	switch (f->type) {
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		reset_control_assert(dev->rstc);
+		reset_control_deassert(dev->rstc);
+
 		if(ctx->vpu_src_fmt && ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG4_FRAME
 				&& dev->mbh_buffer_virt) {
 			int width = ctx->src_fmt.width;
@@ -370,7 +374,7 @@ static int vidioc_s_fmt_vid_out(struct file *file, void *priv,
 const struct v4l2_ioctl_ops sunxi_cedrus_ioctl_ops = {
 	.vidioc_querycap	= vidioc_querycap,
 
-	.vidioc_enum_fmt_vid_cap = vidioc_enum_fmt_vid_cap,
+	.vidioc_enum_fmt_vid_cap	= vidioc_enum_fmt_vid_cap,
 	.vidioc_g_fmt_vid_cap_mplane	= vidioc_g_fmt_vid_cap,
 	.vidioc_try_fmt_vid_cap_mplane	= vidioc_try_fmt_vid_cap,
 	.vidioc_s_fmt_vid_cap_mplane	= vidioc_s_fmt_vid_cap,
