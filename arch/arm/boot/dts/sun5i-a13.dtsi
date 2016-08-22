@@ -347,15 +347,14 @@
 			compatible = "allwinner,sun5i-a13-video-engine";
 			memory-region = <&ve_reserved>;
 
-			clocks = <&pll4>, <&ahb_gates 32>,
-				 <&ccu CLK_VE>, <&dram_gates 0>;
-			clock-names = "ve_pll", "ahb_ve",
-				      "ve", "sdram_ve";
+			clocks = <&ahb_gates 32>, <&ccu CLK_VE>,
+				<&dram_gates 0>;
+			clock-names = "ahb_ve", "ve", "sdram_ve";
 
 			resets = <&ccu RST_VE>;
 			reset-names = "ve";
 
-			interrupts = <53>; // /!\ TODO: SUN7I: +32
+			interrupts = <53>;
 			interrupt-names = "ve";
 		};
 
