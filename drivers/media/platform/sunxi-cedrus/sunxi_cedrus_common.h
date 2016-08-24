@@ -49,6 +49,18 @@ struct sunxi_cedrus_dev {
 	struct reset_control *rstc;
 
 	char *base;
+
+	unsigned int mbh_buf;
+	unsigned int dcac_buf;
+	unsigned int ncf_buf;
+
+	void *mbh_buf_virt;
+	void *dcac_buf_virt;
+	void *ncf_buf_virt;
+
+	unsigned int mbh_buf_size;
+	unsigned int dcac_buf_size;
+	unsigned int ncf_buf_size;
 };
 
 struct sunxi_cedrus_fmt {
@@ -72,6 +84,7 @@ struct sunxi_cedrus_ctx {
 	struct vb2_buffer *dst_bufs[VIDEO_MAX_FRAME];
 
 	struct v4l2_ctrl *mpeg2_frame_hdr_ctrl;
+	struct v4l2_ctrl *mpeg4_frame_hdr_ctrl;
 };
 
 static inline void sunxi_cedrus_write(struct sunxi_cedrus_dev *vpu,

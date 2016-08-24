@@ -32,5 +32,8 @@ void sunxi_cedrus_hw_remove(struct sunxi_cedrus_dev *vpu);
 void process_mpeg2(struct sunxi_cedrus_ctx *ctx, dma_addr_t in_buf,
 		   dma_addr_t out_luma, dma_addr_t out_chroma,
 		   struct v4l2_ctrl_mpeg2_frame_hdr *frame_hdr);
+void process_mpeg4(struct sunxi_cedrus_ctx *ctx, dma_addr_t in_buf,
+		   dma_addr_t out_luma, dma_addr_t out_chroma,
+		   struct v4l2_ctrl_mpeg4_frame_hdr *frame_hdr);
 
 #endif /* SUNXI_CEDRUS_HW_H_ */
