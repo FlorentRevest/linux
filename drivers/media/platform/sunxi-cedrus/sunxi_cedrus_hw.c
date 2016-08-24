@@ -47,6 +47,13 @@ static irqreturn_t sunxi_cedrus_ve_irq(int irq, void *dev_id)
 	int val;
 	unsigned long flags;
 
+	/* Disable MPEG interrupts and stop the MPEG engine */
+	val = sunxi_cedrus_read(vpu, VE_MPEG_CTRL);
+	sunxi_cedrus_write(vpu, val & (~0xf), VE_MPEG_CTRL);
+	val = sunxi_cedrus_read(vpu, VE_MPEG_STATUS);
+	sunxi_cedrus_write(vpu, 0x0000c00f, VE_MPEG_STATUS);
+	sunxi_cedrus_write(vpu, VE_CTRL_REINIT, VE_CTRL);
+
 	curr_ctx = v4l2_m2m_get_curr_priv(vpu->m2m_dev);
 
 	if (!curr_ctx) {
@@ -57,9 +64,15 @@ static irqreturn_t sunxi_cedrus_ve_irq(int irq, void *dev_id)
 	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->fh.m2m_ctx);
 	dst_vb = v4l2_m2m_dst_buf_remove(curr_ctx->fh.m2m_ctx);
 
+	/* First bit of MPEG_STATUS means success */
 	spin_lock_irqsave(&vpu->irqlock, flags);
-	v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_ERROR);
-	v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_ERROR);
+	if (val & 0x1) {
+		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_DONE);
+		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_DONE);
+	} else {
+		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_ERROR);
+		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_ERROR);
+	}
 	spin_unlock_irqrestore(&vpu->irqlock, flags);
 
 	v4l2_m2m_job_finish(vpu->m2m_dev, curr_ctx->fh.m2m_ctx);

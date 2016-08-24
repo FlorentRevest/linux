@@ -48,6 +48,11 @@ static struct sunxi_cedrus_fmt formats[] = {
 		.depth = 8,
 		.num_planes = 2,
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_MPEG2_FRAME,
+		.types	= SUNXI_CEDRUS_OUTPUT,
+		.num_planes = 1,
+	},
 };
 
 #define NUM_FORMATS ARRAY_SIZE(formats)
@@ -120,8 +125,14 @@ void device_run(void *priv)
 		 V4L2_BUF_FLAG_KEYFRAME | V4L2_BUF_FLAG_PFRAME |
 		 V4L2_BUF_FLAG_BFRAME   | V4L2_BUF_FLAG_TSTAMP_SRC_MASK);
 
-	v4l2_m2m_buf_done(in_vb, VB2_BUF_STATE_ERROR);
-	v4l2_m2m_buf_done(out_vb, VB2_BUF_STATE_ERROR);
+	if (ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG2_FRAME) {
+		struct v4l2_ctrl_mpeg2_frame_hdr *frame_hdr =
+				ctx->mpeg2_frame_hdr_ctrl->p_new.p;
+		process_mpeg2(ctx, in_buf, out_luma, out_chroma, frame_hdr);
+	} else {
+		v4l2_m2m_buf_done(in_vb, VB2_BUF_STATE_ERROR);
+		v4l2_m2m_buf_done(out_vb, VB2_BUF_STATE_ERROR);
+	}
 }
 
 /*

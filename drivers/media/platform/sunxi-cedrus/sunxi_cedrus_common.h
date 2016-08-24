@@ -70,6 +70,8 @@ struct sunxi_cedrus_ctx {
 	struct v4l2_ctrl_handler hdl;
 
 	struct vb2_buffer *dst_bufs[VIDEO_MAX_FRAME];
+
+	struct v4l2_ctrl *mpeg2_frame_hdr_ctrl;
 };
 
 static inline void sunxi_cedrus_write(struct sunxi_cedrus_dev *vpu,
