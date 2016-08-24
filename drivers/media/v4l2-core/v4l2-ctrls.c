@@ -761,6 +761,8 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER:		return "Repeat Sequence Header";
 	case V4L2_CID_MPEG_VIDEO_FORCE_KEY_FRAME:		return "Force Key Frame";
 
+	case V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR:		return "MPEG2 Frame Header";
+
 	/* VPX controls */
 	case V4L2_CID_MPEG_VIDEO_VPX_NUM_PARTITIONS:		return "VPX Number of Partitions";
 	case V4L2_CID_MPEG_VIDEO_VPX_IMD_DISABLE_4X4:		return "VPX Intra Mode Decision Disable";
@@ -1143,6 +1145,9 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_RDS_TX_ALT_FREQS:
 		*type = V4L2_CTRL_TYPE_U32;
+		break;
+	case V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR:
+		*type = V4L2_CTRL_TYPE_MPEG2_FRAME_HDR;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
@@ -1542,6 +1547,9 @@ static int std_validate(const struct v4l2_ctrl *ctrl, u32 idx,
 			return -ERANGE;
 		if ((len - (u32)ctrl->minimum) % (u32)ctrl->step)
 			return -ERANGE;
+		return 0;
+
+	case V4L2_CTRL_TYPE_MPEG2_FRAME_HDR:
 		return 0;
 
 	/* FIXME:just return 0 for now */
@@ -2096,6 +2104,9 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_U32:
 		elem_size = sizeof(u32);
+		break;
+	case V4L2_CTRL_TYPE_MPEG2_FRAME_HDR:
+		elem_size = sizeof(struct v4l2_ctrl_mpeg2_frame_hdr);
 		break;
 	default:
 		if (type < V4L2_CTRL_COMPOUND_TYPES)
