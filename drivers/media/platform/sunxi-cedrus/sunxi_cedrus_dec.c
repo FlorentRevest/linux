@@ -53,6 +53,11 @@ static struct sunxi_cedrus_fmt formats[] = {
 		.types	= SUNXI_CEDRUS_OUTPUT,
 		.num_planes = 1,
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_MPEG4_FRAME,
+		.types	= SUNXI_CEDRUS_OUTPUT,
+		.num_planes = 1,
+	},
 };
 
 #define NUM_FORMATS ARRAY_SIZE(formats)
@@ -129,6 +134,10 @@ void device_run(void *priv)
 		struct v4l2_ctrl_mpeg2_frame_hdr *frame_hdr =
 				ctx->mpeg2_frame_hdr_ctrl->p_new.p;
 		process_mpeg2(ctx, in_buf, out_luma, out_chroma, frame_hdr);
+	} else if (ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG4_FRAME) {
+		struct v4l2_ctrl_mpeg4_frame_hdr *frame_hdr =
+				ctx->mpeg4_frame_hdr_ctrl->p_new.p;
+		process_mpeg4(ctx, in_buf, out_luma, out_chroma, frame_hdr);
 	} else {
 		v4l2_m2m_buf_done(in_vb, VB2_BUF_STATE_ERROR);
 		v4l2_m2m_buf_done(out_vb, VB2_BUF_STATE_ERROR);
@@ -306,8 +315,32 @@ static int vidioc_s_fmt(struct sunxi_cedrus_ctx *ctx, struct v4l2_format *f)
 
 	switch (f->type) {
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		if (ctx->vpu_src_fmt && ctx->vpu_src_fmt->fourcc ==
+		       V4L2_PIX_FMT_MPEG4_FRAME && dev->mbh_buf_virt) {
+			dma_free_coherent(dev->dev, dev->mbh_buf_size,
+					  dev->mbh_buf_virt, dev->mbh_buf);
+			dma_free_coherent(dev->dev, dev->dcac_buf_size,
+					  dev->dcac_buf_virt, dev->dcac_buf);
+			dma_free_coherent(dev->dev, dev->ncf_buf_size,
+					  dev->ncf_buf_virt, dev->ncf_buf);
+		}
+
 		ctx->vpu_src_fmt = find_format(f);
 		ctx->src_fmt = *pix_fmt_mp;
+
+		if (ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_MPEG4_FRAME) {
+			dev->mbh_buf_size  = pix_fmt_mp->height * 2048;
+			dev->dcac_buf_size = 2 * pix_fmt_mp->width *
+					       pix_fmt_mp->height;
+			dev->ncf_buf_size  = 4 * 1024;
+
+			dev->mbh_buf_virt = dma_alloc_coherent(dev->dev,
+			       dev->mbh_buf_size, &dev->mbh_buf, GFP_KERNEL);
+			dev->dcac_buf_virt = dma_alloc_coherent(dev->dev,
+			       dev->dcac_buf_size, &dev->dcac_buf, GFP_KERNEL);
+			dev->ncf_buf_virt = dma_alloc_coherent(dev->dev,
+			       dev->ncf_buf_size, &dev->ncf_buf, GFP_KERNEL);
+		}
 		break;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 		fmt = find_format(f);
