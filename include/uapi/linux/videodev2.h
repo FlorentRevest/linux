@@ -604,6 +604,7 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_VC1_ANNEX_L v4l2_fourcc('V', 'C', '1', 'L') /* SMPTE 421M Annex L compliant stream */
 #define V4L2_PIX_FMT_VP8      v4l2_fourcc('V', 'P', '8', '0') /* VP8 */
 #define V4L2_PIX_FMT_MPEG2_FRAME  v4l2_fourcc('M', 'G', '2', 'F') /* MPEG2 frame */
+#define V4L2_PIX_FMT_MPEG4_FRAME  v4l2_fourcc('M', 'G', '4', 'F') /* MPEG4 frame */
 
 /*  Vendor-specific formats   */
 #define V4L2_PIX_FMT_CPIA1    v4l2_fourcc('C', 'P', 'I', 'A') /* cpia1 YUV */
@@ -1502,6 +1503,7 @@ struct v4l2_ext_control {
 		__u16 __user *p_u16;
 		__u32 __user *p_u32;
 		struct v4l2_ctrl_mpeg2_frame_hdr __user *p_mpeg2_frame_hdr;
+		struct v4l2_ctrl_mpeg4_frame_hdr __user *p_mpeg4_frame_hdr;
 		void __user *ptr;
 	};
 } __attribute__ ((packed));
@@ -1547,6 +1549,7 @@ enum v4l2_ctrl_type {
 	V4L2_CTRL_TYPE_U16	     = 0x0101,
 	V4L2_CTRL_TYPE_U32	     = 0x0102,
 	V4L2_CTRL_TYPE_MPEG2_FRAME_HDR  = 0x0109,
+	V4L2_CTRL_TYPE_MPEG4_FRAME_HDR  = 0x010A,
 
 	V4L2_CTRL_TYPE_PRIVATE       = 0xffff,
 };
