@@ -46,8 +46,10 @@
 
 #include "sun5i.dtsi"
 
+#include <dt-bindings/clock/sun5i-a13-ccu.h>
 #include <dt-bindings/pinctrl/sun4i-a10.h>
 #include <dt-bindings/thermal/thermal.h>
+#include <dt-bindings/reset/sun5i-a13-ccu.h>
 
 / {
 	interrupt-parent = <&intc>;
@@ -326,6 +328,15 @@
 					};
 				};
 			};
+		};
+
+		ccu: clock@01c20000 {
+			compatible = "allwinner,sun5i-a13-ccu";
+			reg = <0x01c20000 0x400>;
+			clocks = <&osc24M>, <&osc32k>;
+			clock-names = "hosc", "losc";
+			#clock-cells = <1>;
+			#reset-cells = <1>;
 		};
 	};
 };
