@@ -69,6 +69,19 @@
 		};
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		ve_reserved: cma {
+			compatible = "shared-dma-pool";
+			reg = <0x43d00000 0x9000000>;
+			no-map;
+			linux,cma-default;
+		};
+	};
+
 	thermal-zones {
 		cpu_thermal {
 			/* milliseconds */
@@ -328,6 +341,24 @@
 					};
 				};
 			};
+		};
+
+		ve: video-engine@01c0e000 {
+			compatible = "allwinner,sun5i-a13-video-engine";
+			memory-region = <&ve_reserved>;
+
+			clocks = <&ahb_gates 32>, <&ccu CLK_VE>,
+				 <&dram_gates 0>;
+			clock-names = "ahb", "mod", "ram";
+
+			assigned-clocks = <&ccu CLK_VE>;
+			assigned-clock-rates = <320000000>;
+
+			resets = <&ccu RST_VE>;
+
+			interrupts = <53>;
+
+			reg = <0x01c0e000 0x1000>;
 		};
 
 		ccu: clock@01c20000 {
