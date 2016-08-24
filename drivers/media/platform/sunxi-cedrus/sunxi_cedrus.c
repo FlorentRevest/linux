@@ -46,12 +46,29 @@ static int sunxi_cedrus_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct sunxi_cedrus_ctx *ctx =
 		container_of(ctrl->handler, struct sunxi_cedrus_ctx, hdl);
 
-	v4l2_err(&ctx->dev->v4l2_dev, "Invalid control\n");
-	return -EINVAL;
+	switch (ctrl->id) {
+	case V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR:
+		/* This is kept in memory and used directly. */
+		break;
+	default:
+		v4l2_err(&ctx->dev->v4l2_dev, "Invalid control\n");
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static const struct v4l2_ctrl_ops sunxi_cedrus_ctrl_ops = {
 	.s_ctrl = sunxi_cedrus_s_ctrl,
+};
+
+static const struct v4l2_ctrl_config sunxi_cedrus_ctrl_mpeg2_frame_hdr = {
+	.ops = &sunxi_cedrus_ctrl_ops,
+	.id = V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR,
+	.type = V4L2_CTRL_TYPE_PRIVATE,
+	.name = "MPEG2 Frame Header Parameters",
+	.max_reqs = VIDEO_MAX_FRAME,
+	.elem_size = sizeof(struct v4l2_ctrl_mpeg2_frame_hdr),
 };
 
 /*
@@ -77,6 +94,10 @@ static int sunxi_cedrus_open(struct file *file)
 	ctx->dev = dev;
 	hdl = &ctx->hdl;
 	v4l2_ctrl_handler_init(hdl, 1);
+
+	ctx->mpeg2_frame_hdr_ctrl = v4l2_ctrl_new_custom(hdl,
+			&sunxi_cedrus_ctrl_mpeg2_frame_hdr, NULL);
+	ctx->mpeg2_frame_hdr_ctrl->flags |= V4L2_CTRL_FLAG_REQ_KEEP;
 
 	if (hdl->error) {
 		rc = hdl->error;
@@ -117,6 +138,7 @@ static int sunxi_cedrus_release(struct file *file)
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	v4l2_ctrl_handler_free(&ctx->hdl);
+	ctx->mpeg2_frame_hdr_ctrl = NULL;
 	mutex_lock(&dev->dev_mutex);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	mutex_unlock(&dev->dev_mutex);
