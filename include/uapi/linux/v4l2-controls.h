@@ -548,6 +548,7 @@ enum v4l2_mpeg_video_mpeg4_profile {
 #define V4L2_CID_MPEG_VIDEO_MPEG4_QPEL		(V4L2_CID_MPEG_BASE+407)
 
 #define V4L2_CID_MPEG_VIDEO_MPEG2_FRAME_HDR     (V4L2_CID_MPEG_BASE+450)
+#define V4L2_CID_MPEG_VIDEO_MPEG4_FRAME_HDR     (V4L2_CID_MPEG_BASE+451)
 
 /*  Control IDs for VP8 streams
  *  Although VP8 is not part of MPEG we add these controls to the MPEG class
@@ -995,6 +996,47 @@ struct v4l2_ctrl_mpeg2_frame_hdr {
 	__u8 q_scale_type;
 	__u8 intra_vlc_format;
 	__u8 alternate_scan;
+
+	__u8 backward_index;
+	__u8 forward_index;
+};
+
+struct v4l2_ctrl_mpeg4_frame_hdr {
+	__u32 slice_len;
+	__u32 slice_pos;
+	unsigned char quant_scale;
+
+	__u16 width;
+	__u16 height;
+
+	struct {
+		unsigned int short_video_header		: 1;
+		unsigned int chroma_format			: 2;
+		unsigned int interlaced			: 1;
+		unsigned int obmc_disable			: 1;
+		unsigned int sprite_enable			: 2;
+		unsigned int sprite_warping_accuracy	: 2;
+		unsigned int quant_type			: 1;
+		unsigned int quarter_sample			: 1;
+		unsigned int data_partitioned		: 1;
+		unsigned int reversible_vlc			: 1;
+		unsigned int resync_marker_disable		: 1;
+	} vol_fields;
+
+	struct {
+		unsigned int vop_coding_type		: 2;
+		unsigned int backward_reference_vop_coding_type	: 2;
+		unsigned int vop_rounding_type		: 1;
+		unsigned int intra_dc_vlc_thr		: 3;
+		unsigned int top_field_first		: 1;
+		unsigned int alternate_vertical_scan_flag	: 1;
+	} vop_fields;
+
+	unsigned char vop_fcode_forward;
+	unsigned char vop_fcode_backward;
+
+	short trb;
+	short trd;
 
 	__u8 backward_index;
 	__u8 forward_index;
