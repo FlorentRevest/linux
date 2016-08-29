@@ -25,24 +25,52 @@
  * For more information consult http://linux-sunxi.org/VE_Register_guide
  */
 
-/* Registers values */
+/* Special registers values */
+
+/* VE_CTRL:
+ * The first 3 bits indicate the engine (0 for MPEG, 1 for H264, b for AVC...)
+ * The 16th and 17th bits indicate the memory type (3 for DDR3 32 bits)
+ * The 20th bit is unknown but needed
+ */
 #define VE_CTRL_MPEG		0x130000
 #define VE_CTRL_H264		0x130001
 #define VE_CTRL_AVC		0x13000b
 #define VE_CTRL_REINIT		0x130007
 
+/* VE_MPEG_CTRL:
+ * The bit 3 (0x8) is used to enable IRQs
+ * The other bits are unknown but needed
+ */
 #define VE_MPEG_CTRL_MPEG2	0x800001b8
 #define VE_MPEG_CTRL_MPEG4	(0x80084118 | BIT(7))
 #define VE_MPEG_CTRL_MPEG4_P	(VE_MPEG_CTRL_MPEG4 | BIT(12))
 
+/* VE_MPEG_VLD_ADDR:
+ * The bits 27 to 4 are used for the address
+ * The bits 31 to 28 (0x7) are used to select the MPEG or JPEG engine
+ */
 #define VE_MPEG_VLD_ADDR_VAL(x)	((x & 0x0ffffff0) | (x >> 28) | (0x7 << 28))
 
+/* VE_MPEG_TRIGGER:
+ * The first three bits are used to trigger the engine
+ * The bits 24 to 26 are used to select the input format (1 for MPEG1, 2 for 
+ *                           MPEG2, 4 for MPEG4)
+ * The bit 21 (0x8) is used to disable bitstream error handling
+ *
+ * In MPEG4 the w*h value is somehow used for an offset, unknown but needed
+ */
 #define VE_TRIG_MPEG1		0x8100000f
 #define VE_TRIG_MPEG2		0x8200000f
 #define VE_TRIG_MPEG4(w, h)	(0x8400000d | ((w * h) << 8))
 
+/* VE_MPEG_SDROT_CTRL:
+ * The bit 8 at zero is used to disable x downscaling
+ * The bit 10 at 0 is used to disable y downscaling
+ * The other bits are unknown but needed
+ */
 #define VE_NO_SDROT_CTRL	0x40620000
 
+/* Decent size fo video buffering verifier */
 #define VBV_SIZE		(1024 * 1024)
 
 /* Registers addresses */
