@@ -41,8 +41,10 @@ void vgic_v3_process_maintenance(struct kvm_vcpu *vcpu)
 
 			WARN_ON(cpuif->vgic_lr[lr] & ICH_LR_STATE);
 
-			kvm_notify_acked_irq(vcpu->kvm, 0,
-					     intid - VGIC_NR_PRIVATE_IRQS);
+			/* Only SPIs require notification */
+			if (vgic_valid_spi(vcpu->kvm, intid))
+				kvm_notify_acked_irq(vcpu->kvm, 0,
+						     intid - VGIC_NR_PRIVATE_IRQS);
 		}
 
 		/*
@@ -287,6 +289,14 @@ int vgic_v3_map_resources(struct kvm *kvm)
 	if (ret) {
 		kvm_err("Unable to register VGICv3 redist MMIO regions\n");
 		goto out;
+	}
+
+	if (vgic_has_its(kvm)) {
+		ret = vgic_register_its_iodevs(kvm);
+		if (ret) {
+			kvm_err("Unable to register VGIC ITS MMIO regions\n");
+			goto out;
+		}
 	}
 
 	dist->ready = true;

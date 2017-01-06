@@ -99,7 +99,7 @@
 			trips {
 				cpu_alert0: cpu_alert0 {
 					/* milliCelsius */
-					temperature = <850000>;
+					temperature = <85000>;
 					hysteresis = <2000>;
 					type = "passive";
 				};
@@ -343,7 +343,7 @@
 			};
 		};
 
-		video-engine {
+		ve: video-engine@01c0e000 {
 			compatible = "allwinner,sun5i-a13-video-engine";
 			memory-region = <&ve_reserved>;
 
@@ -358,7 +358,7 @@
 
 			interrupts = <53>;
 
-			reg = <0x01c0e000 4096>;
+			reg = <0x01c0e000 0x1000>;
 		};
 
 		ccu: clock@01c20000 {

@@ -30,10 +30,14 @@
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/regmap.h>
 #include <linux/reset.h>
 
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-core.h>
+
+#define SYSCON_SRAM_CTRL_REG0	0x0
+#define SYSCON_SRAM_C1_MAP_VE	0x7fffffff
 
 /*
  * Interrupt handlers.
@@ -130,6 +134,16 @@ int sunxi_cedrus_hw_probe(struct sunxi_cedrus_dev *vpu)
 	vpu->base = devm_ioremap_resource(vpu->dev, res);
 	if (!vpu->base)
 		dev_err(vpu->dev, "could not maps MACC registers\n");
+
+	vpu->syscon = syscon_regmap_lookup_by_phandle(vpu->dev->of_node,
+						      "syscon");
+	if (IS_ERR(vpu->syscon)) {
+		vpu->syscon = NULL;
+	} else {
+		regmap_write_bits(vpu->syscon, SYSCON_SRAM_CTRL_REG0,
+				  SYSCON_SRAM_C1_MAP_VE,
+				  SYSCON_SRAM_C1_MAP_VE);
+	}
 
 	ret = clk_prepare_enable(vpu->ahb_clk);
 	if (ret) {

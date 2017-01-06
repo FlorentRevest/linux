@@ -25,6 +25,7 @@
 
 #include "sunxi_cedrus_regs.h"
 
+#include <linux/mfd/syscon.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ctrls.h>
 
@@ -47,6 +48,8 @@ struct sunxi_cedrus_dev {
 	struct clk *ram_clk;
 
 	struct reset_control *rstc;
+
+	struct regmap *syscon;
 
 	char *base;
 
