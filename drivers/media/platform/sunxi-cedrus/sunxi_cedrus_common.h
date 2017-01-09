@@ -53,9 +53,9 @@ struct sunxi_cedrus_dev {
 
 	char *base;
 
-	unsigned int mbh_buf;
-	unsigned int dcac_buf;
-	unsigned int ncf_buf;
+	dma_addr_t mbh_buf;
+	dma_addr_t dcac_buf;
+	dma_addr_t ncf_buf;
 
 	void *mbh_buf_virt;
 	void *dcac_buf_virt;
