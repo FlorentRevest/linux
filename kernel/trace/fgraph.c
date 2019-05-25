@@ -128,13 +128,13 @@ static inline int get_fgraph_array(struct task_struct *t, int offset)
 }
 
 /* ftrace_graph_entry set to this to tell some archs to run function graph */
-static int entry_run(struct ftrace_graph_ent *trace)
+static int entry_run(struct ftrace_graph_ent *trace, struct fgraph_ops *ops)
 {
 	return 0;
 }
 
 /* ftrace_graph_return set to this to tell some archs to run function graph */
-static void return_run(struct ftrace_graph_ret *trace)
+static void return_run(struct ftrace_graph_ret *trace, struct fgraph_ops *ops)
 {
 	return;
 }
@@ -179,12 +179,14 @@ get_ret_stack(struct task_struct *t, int offset, int *index)
 /* Both enabled by default (can be cleared by function_graph tracer flags */
 static bool fgraph_sleep_time = true;
 
-int ftrace_graph_entry_stub(struct ftrace_graph_ent *trace)
+int ftrace_graph_entry_stub(struct ftrace_graph_ent *trace,
+			    struct fgraph_ops *gops)
 {
 	return 0;
 }
 
-static void ftrace_graph_ret_stub(struct ftrace_graph_ret *trace)
+static void ftrace_graph_ret_stub(struct ftrace_graph_ret *trace,
+				  struct fgraph_ops *gops)
 {
 }
 
@@ -357,7 +359,7 @@ int function_graph_enter(unsigned long ret, unsigned long func,
 			atomic_inc(&current->trace_overrun);
 			break;
 		}
-		if (fgraph_array[i]->entryfunc(&trace)) {
+		if (fgraph_array[i]->entryfunc(&trace, fgraph_array[i])) {
 			offset = current->curr_ret_stack;
 			/* Check the top level stored word */
 			type = get_fgraph_type(current, offset);
@@ -525,7 +527,7 @@ unsigned long ftrace_return_to_handler(unsigned long frame_pointer)
 	i = 0;
 	do {
 		idx = get_fgraph_array(current, offset + i);
-		fgraph_array[idx]->retfunc(&trace);
+		fgraph_array[idx]->retfunc(&trace, fgraph_array[idx]);
 		i++;
 	} while (i < index);
 
@@ -650,7 +652,7 @@ void ftrace_graph_sleep_time_control(bool enable)
  * Simply points to ftrace_stub, but with the proper protocol.
  * Defined by the linker script in linux/vmlinux.lds.h
  */
-extern void ftrace_stub_graph(struct ftrace_graph_ret *);
+extern void ftrace_stub_graph(struct ftrace_graph_ret *, struct fgraph_ops *ops);
 
 /* The callbacks that hook a function */
 trace_func_graph_ret_t ftrace_graph_return = ftrace_stub_graph;
