@@ -28,8 +28,9 @@
 #define FGRAPH_RET_INDEX (FGRAPH_RET_SIZE / sizeof(long))
 #define SHADOW_STACK_SIZE (PAGE_SIZE)
 #define SHADOW_STACK_INDEX (SHADOW_STACK_SIZE / sizeof(long))
-/* Leave on a buffer at the end */
-#define SHADOW_STACK_MAX_INDEX (SHADOW_STACK_INDEX - FGRAPH_RET_INDEX)
+#define SHADOW_STACK_MAX_INDEX SHADOW_STACK_INDEX
+/* Leave on a little buffer at the bottom */
+#define SHADOW_STACK_MIN_INDEX FGRAPH_RET_INDEX
 
 #define RET_STACK(t, index) ((struct ftrace_ret_stack *)(&(t)->ret_stack[index]))
 #define RET_STACK_INC(c) ({ c += FGRAPH_RET_INDEX; })
@@ -98,16 +99,16 @@ ftrace_push_return_trace(unsigned long ret, unsigned long func,
 	smp_rmb();
 
 	/* The return trace stack is full */
-	if (current->curr_ret_stack >= SHADOW_STACK_MAX_INDEX) {
+	if (current->curr_ret_stack <= SHADOW_STACK_MIN_INDEX) {
 		atomic_inc(&current->trace_overrun);
 		return -EBUSY;
 	}
 
 	calltime = trace_clock_local();
 
-	index = current->curr_ret_stack;
-	RET_STACK_INC(current->curr_ret_stack);
-	ret_stack = RET_STACK(current, index);
+	RET_STACK_DEC(current->curr_ret_stack);
+	ret_stack = RET_STACK(current, current->curr_ret_stack);
+	/* Make sure interrupts see the current value of curr_ret_stack */
 	barrier();
 	ret_stack->ret = ret;
 	ret_stack->func = func;
@@ -163,7 +164,7 @@ int function_graph_enter(unsigned long ret, unsigned long func,
 
 	return 0;
  out_ret:
-	RET_STACK_DEC(current->curr_ret_stack);
+	RET_STACK_INC(current->curr_ret_stack);
  out:
 	current->curr_ret_depth--;
 	return -EBUSY;
@@ -178,9 +179,8 @@ ftrace_pop_return_trace(struct ftrace_graph_ret *trace, unsigned long *ret,
 	int index;
 
 	index = current->curr_ret_stack;
-	RET_STACK_DEC(index);
 
-	if (unlikely(index < 0 || index > SHADOW_STACK_MAX_INDEX)) {
+	if (unlikely(index < 0 || index >= SHADOW_STACK_MAX_INDEX)) {
 		ftrace_graph_stop();
 		WARN_ON(1);
 		/* Might as well panic, otherwise we have no where to go */
@@ -273,7 +273,7 @@ unsigned long ftrace_return_to_handler(unsigned long frame_pointer)
 	 * curr_ret_stack is after that.
 	 */
 	barrier();
-	RET_STACK_DEC(current->curr_ret_stack);
+	RET_STACK_INC(current->curr_ret_stack);
 
 	if (unlikely(!ret)) {
 		ftrace_graph_stop();
@@ -336,9 +336,9 @@ unsigned long ftrace_graph_ret_addr(struct task_struct *task, int *idx,
 	if (ret != (unsigned long)dereference_kernel_function_descriptor(return_to_handler))
 		return ret;
 
-	RET_STACK_DEC(index);
+	RET_STACK_INC(index);
 
-	for (i = index; i >= 0; RET_STACK_DEC(i)) {
+	for (i = index; i < SHADOW_STACK_MAX_INDEX; RET_STACK_INC(i)) {
 		ret_stack = RET_STACK(task, i);
 		if (ret_stack->retp == retp)
 			return ret_stack->ret;
@@ -356,13 +356,13 @@ unsigned long ftrace_graph_ret_addr(struct task_struct *task, int *idx,
 		return ret;
 
 	task_idx = task->curr_ret_stack;
-	RET_STACK_DEC(task_idx);
+	RET_STACK_INC(task_idx);
 
-	if (!task->ret_stack || task_idx < *idx)
+	if (!task->ret_stack || task_idx > *idx)
 		return ret;
 
 	task_idx -= *idx;
-	RET_STACK_INC(*idx);
+	RET_STACK_DEC(*idx);
 
 	return RET_STACK(task, task_idx);
 }
@@ -428,7 +428,7 @@ static int alloc_retstack_tasklist(unsigned long **ret_stack_list)
 
 		if (t->ret_stack == NULL) {
 			atomic_set(&t->trace_overrun, 0);
-			t->curr_ret_stack = 0;
+			t->curr_ret_stack = SHADOW_STACK_MAX_INDEX;
 			t->curr_ret_depth = -1;
 			/* Make sure the tasks see the 0 first: */
 			smp_wmb();
@@ -475,10 +475,11 @@ ftrace_graph_probe_sched_switch(void *ignore, bool preempt,
 	 */
 	timestamp -= next->ftrace_timestamp;
 
-	for (index = next->curr_ret_stack - FGRAPH_RET_INDEX; index >= 0; ) {
+	for (index = next->curr_ret_stack + FGRAPH_RET_INDEX;
+	     index < SHADOW_STACK_MAX_INDEX; ) {
 		ret_stack = RET_STACK(next, index);
 		ret_stack->calltime += timestamp;
-		index -= FGRAPH_RET_INDEX;
+		index += FGRAPH_RET_INDEX;
 	}
 }
 
@@ -568,7 +569,7 @@ void ftrace_graph_init_task(struct task_struct *t)
 {
 	/* Make sure we do not use the parent ret_stack */
 	t->ret_stack = NULL;
-	t->curr_ret_stack = 0;
+	t->curr_ret_stack = SHADOW_STACK_MAX_INDEX;
 	t->curr_ret_depth = -1;
 
 	if (ftrace_graph_active) {
