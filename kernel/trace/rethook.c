@@ -33,20 +33,24 @@ void rethook_flush_task(struct task_struct *tk)
 	}
 }
 
+static int free_obj(void *context, void *node, int user, int element)
+{
+	struct rethook_node *rhn;
+	int *count = context;
+
+	rhn = container_of(node, struct rethook_node, freelist);
+	kfree(rhn);
+	(*count)++;
+
+	return 0;
+}
+
 static void rethook_free_rcu(struct rcu_head *head)
 {
 	struct rethook *rh = container_of(head, struct rethook, rcu);
-	struct rethook_node *rhn;
-	struct freelist_node *node;
 	int count = 1;
 
-	node = rh->pool.head;
-	while (node) {
-		rhn = container_of(node, struct rethook_node, freelist);
-		node = node->next;
-		kfree(rhn);
-		count++;
-	}
+	freelist_fini(&rh->pool, &count, free_obj);
 
 	/* The rh->ref is the number of pooled node + 1 */
 	if (refcount_sub_and_test(count, &rh->ref))
@@ -88,7 +92,7 @@ struct rethook *rethook_alloc(void *data, rethook_handler_t handler)
 
 	rh->data = data;
 	rh->handler = handler;
-	rh->pool.head = NULL;
+	freelist_init(&rh->pool, 0, 0, GFP_KERNEL, 0, 0);
 	refcount_set(&rh->ref, 1);
 
 	return rh;
@@ -105,7 +109,7 @@ struct rethook *rethook_alloc(void *data, rethook_handler_t handler)
 void rethook_add_node(struct rethook *rh, struct rethook_node *node)
 {
 	node->rethook = rh;
-	freelist_add(&node->freelist, &rh->pool);
+	freelist_add_scattered(&node->freelist, &rh->pool);
 	refcount_inc(&rh->ref);
 }
 
@@ -130,7 +134,7 @@ void rethook_recycle(struct rethook_node *node)
 	lockdep_assert_preemption_disabled();
 
 	if (likely(READ_ONCE(node->rethook->handler)))
-		freelist_add(&node->freelist, &node->rethook->pool);
+		freelist_push(&node->freelist, &node->rethook->pool);
 	else
 		call_rcu(&node->rcu, free_rethook_node_rcu);
 }
@@ -163,7 +167,7 @@ struct rethook_node *rethook_try_get(struct rethook *rh)
 	if (unlikely(!rcu_is_watching()))
 		return NULL;
 
-	fn = freelist_try_get(&rh->pool);
+	fn = freelist_pop(&rh->pool);
 	if (!fn)
 		return NULL;
 

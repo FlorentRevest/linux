@@ -1865,10 +1865,12 @@ static struct notifier_block kprobe_exceptions_nb = {
 static void free_rp_inst_rcu(struct rcu_head *head)
 {
 	struct kretprobe_instance *ri = container_of(head, struct kretprobe_instance, rcu);
+	struct kretprobe_holder *rph = ri->rph;
 
-	if (refcount_dec_and_test(&ri->rph->ref))
-		kfree(ri->rph);
-	kfree(ri);
+	if (refcount_dec_and_test(&rph->ref)) {
+		freelist_fini(&rph->fh, NULL, NULL);
+		kfree(rph);
+	}
 }
 NOKPROBE_SYMBOL(free_rp_inst_rcu);
 
@@ -1876,10 +1878,11 @@ static void recycle_rp_inst(struct kretprobe_instance *ri)
 {
 	struct kretprobe *rp = get_kretprobe(ri);
 
-	if (likely(rp))
-		freelist_add(&ri->freelist, &rp->freelist);
-	else
+	if (likely(rp)) {
+		freelist_push(&ri->freelist, &rp->rph->fh);
+	} else {
 		call_rcu(&ri->rcu, free_rp_inst_rcu);
+	}
 }
 NOKPROBE_SYMBOL(recycle_rp_inst);
 
@@ -1914,23 +1917,19 @@ NOKPROBE_SYMBOL(kprobe_flush_task);
 
 static inline void free_rp_inst(struct kretprobe *rp)
 {
-	struct kretprobe_instance *ri;
-	struct freelist_node *node;
-	int count = 0;
+	struct kretprobe_holder *rph = rp->rph;
+	struct freelist_node *fn;
 
-	node = rp->freelist.head;
-	while (node) {
-		ri = container_of(node, struct kretprobe_instance, freelist);
-		node = node->next;
-
-		kfree(ri);
-		count++;
-	}
-
-	if (refcount_sub_and_test(count, &rp->rph->ref)) {
-		kfree(rp->rph);
-		rp->rph = NULL;
-	}
+	rp->rph = NULL;
+	do {
+		/* must do pop() first since we have one extra ref grabbed */
+		fn = freelist_pop(&rph->fh);
+		if (refcount_dec_and_test(&rph->ref)) {
+			freelist_fini(&rph->fh, NULL, NULL);
+			kfree(rph);
+			break;
+		}
+	} while (fn);
 }
 
 /* This assumes the 'tsk' is the current task or the is not running. */
@@ -2072,19 +2071,18 @@ NOKPROBE_SYMBOL(__kretprobe_trampoline_handler)
 static int pre_handler_kretprobe(struct kprobe *p, struct pt_regs *regs)
 {
 	struct kretprobe *rp = container_of(p, struct kretprobe, kp);
-	struct kretprobe_instance *ri;
 	struct freelist_node *fn;
+	struct kretprobe_instance *ri;
 
-	fn = freelist_try_get(&rp->freelist);
+	fn = freelist_pop(&rp->rph->fh);
 	if (!fn) {
-		rp->nmissed++;
+		atomic_inc((atomic_t *)&rp->nmissed);
 		return 0;
 	}
-
 	ri = container_of(fn, struct kretprobe_instance, freelist);
 
 	if (rp->entry_handler && rp->entry_handler(ri, regs)) {
-		freelist_add(&ri->freelist, &rp->freelist);
+		freelist_push(fn, &rp->rph->fh);
 		return 0;
 	}
 
@@ -2175,6 +2173,18 @@ int kprobe_on_func_entry(kprobe_opcode_t *addr, const char *sym, unsigned long o
 	return 0;
 }
 
+#if !defined(CONFIG_KRETPROBE_ON_RETHOOK)
+static int kretprobe_init_inst(void *context, struct freelist_node *fn)
+{
+	struct kretprobe_instance *ri;
+
+	ri = container_of(fn, struct kretprobe_instance, freelist);
+	ri->rph = context;
+
+	return 0;
+}
+#endif /* !CONFIG_KRETPROBE_ON_RETHOOK */
+
 int register_kretprobe(struct kretprobe *rp)
 {
 	int ret;
@@ -2238,24 +2248,19 @@ int register_kretprobe(struct kretprobe *rp)
 		rp->rh = NULL;
 	}
 #else	/* !CONFIG_KRETPROBE_ON_RETHOOK */
-	rp->freelist.head = NULL;
 	rp->rph = kzalloc(sizeof(struct kretprobe_holder), GFP_KERNEL);
 	if (!rp->rph)
 		return -ENOMEM;
 
-	rp->rph->rp = rp;
-	for (i = 0; i < rp->maxactive; i++) {
-		inst = kzalloc(sizeof(struct kretprobe_instance) +
-			       rp->data_size, GFP_KERNEL);
-		if (inst == NULL) {
-			refcount_set(&rp->rph->ref, i);
-			free_rp_inst(rp);
-			return -ENOMEM;
-		}
-		inst->rph = rp->rph;
-		freelist_add(&inst->freelist, &rp->freelist);
+	if (freelist_init(&rp->rph->fh, rp->maxactive, rp->data_size +
+			 sizeof(struct kretprobe_instance), GFP_KERNEL,
+			 rp->rph, kretprobe_init_inst)) {
+		kfree(rp->rph);
+		rp->rph = NULL;
+		return -ENOMEM;
 	}
-	refcount_set(&rp->rph->ref, i);
+	refcount_set(&rp->rph->ref, rp->maxactive + 1);
+	rp->rph->rp = rp;
 
 	rp->nmissed = 0;
 	/* Establish function entry probe point */
