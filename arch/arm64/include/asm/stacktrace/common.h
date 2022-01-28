@@ -67,7 +67,7 @@ struct unwind_state {
 	DECLARE_BITMAP(stacks_done, __NR_STACK_TYPES);
 	unsigned long prev_fp;
 	enum stack_type prev_type;
-#ifdef CONFIG_KRETPROBES
+#if defined(CONFIG_RETHOOK)
 	struct llist_node *kr_cur;
 #endif
 	struct task_struct *task;
@@ -95,7 +95,7 @@ static inline void unwind_init_common(struct unwind_state *state,
 				      struct task_struct *task)
 {
 	state->task = task;
-#ifdef CONFIG_KRETPROBES
+#if defined(CONFIG_RETHOOK)
 	state->kr_cur = NULL;
 #endif
 
