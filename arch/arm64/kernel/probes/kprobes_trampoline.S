@@ -61,26 +61,3 @@
 	ldp x28, x29, [sp, #S_X28]
 	.endm
 
-SYM_CODE_START(__kretprobe_trampoline)
-	sub sp, sp, #PT_REGS_SIZE
-
-	save_all_base_regs
-
-	/* Setup a frame pointer. */
-	add x29, sp, #S_FP
-
-	mov x0, sp
-	bl trampoline_probe_handler
-	/*
-	 * Replace trampoline address in lr with actual orig_ret_addr return
-	 * address.
-	 */
-	mov lr, x0
-
-	/* The frame pointer (x29) is restored with other registers. */
-	restore_all_base_regs
-
-	add sp, sp, #PT_REGS_SIZE
-	ret
-
-SYM_CODE_END(__kretprobe_trampoline)
