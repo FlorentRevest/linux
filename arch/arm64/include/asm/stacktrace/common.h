@@ -70,7 +70,7 @@ static inline void unwind_init_common(struct unwind_state *state,
 				      struct task_struct *task)
 {
 	state->task = task;
-#ifdef CONFIG_KRETPROBES
+#if defined(CONFIG_RETHOOK)
 	state->kr_cur = NULL;
 #endif
 
