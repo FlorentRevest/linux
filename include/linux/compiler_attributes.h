@@ -78,7 +78,11 @@
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-cold-function-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Label-Attributes.html#index-cold-label-attribute
  */
-#define __cold                          __attribute__((__cold__))
+#if 0
+# define __cold                          __attribute__((__cold__))
+#else
+# define __cold                          __attribute__((__cold__)) __aligned(8)
+#endif
 
 /*
  * Note the long name.
@@ -313,6 +317,14 @@
  * clang: https://clang.llvm.org/docs/AttributeReference.html#section-declspec-allocate
  */
 #define __section(section)              __attribute__((__section__(section)))
+
+/*
+ * GCC evidently ignores the effects of -falign-functions=n when placing a
+ * function into a separate section. Remind it.
+ *
+ * TODO: make this an ARCH_MIN_FUNCTION_ALIGNMENT or similar.
+ */
+#define __text_section(section)		__section(section)	__aligned(8)
 
 /*
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-unused-function-attribute

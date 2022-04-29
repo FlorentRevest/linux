@@ -152,6 +152,61 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 }
 
 #ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
+unsigned long ftrace_call_adjust(unsigned long addr)
+{
+	/*
+	 * When using mcount, addr is the address of the mcount call
+	 * instruction, and no adjustment is necessary.
+	 */
+	if (!IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_ARGS))
+		return addr;
+
+	/*
+	 * Starting from an 8-byte aligned base, the compiler has either
+	 * generated:
+	 *
+	 * +00:		NOP		// Literal (first 32 bits)
+	 * +04:		NOP		// Literal (last 32 bits)
+	 * +08:	func:	NOP		// To be patched to MOV X9, LR
+	 * +12:		NOP		// To be patched to BL <caller>
+	 *
+	 * Or:
+	 *
+	 * +00:		NOP		// Literal (first 32 bits)
+	 * +04:		NOP		// Literal (last 32 bits)
+	 * +08:	func:	BTI	C
+	 * +12:		NOP		// To be patched to MOV X9, LR
+	 * +16:		NOP		// To be patched to BL <caller>
+	 *
+	 * In either case, the compiler has recorded the address of the first
+	 * NOP, which is before the function entry point.
+	 *
+	 * We want to adjust 'addr' to be the address of the NOP which will be
+	 * patched with the ftrace call.
+	 */
+
+	if (!IS_ALIGNED(addr, sizeof(unsigned long))) {
+		WARN(1, "%s: unaligned literal for %pS\n",
+		     __func__, (void *)(addr + 8));
+	}
+
+	/* Skip the NOPs placed before the function entry point */
+	addr += 2 * AARCH64_INSN_SIZE;
+
+	/* Skip any BTI */
+	if (IS_ENABLED(CONFIG_ARM64_BTI_KERNEL)) {
+		u32 nop = aarch64_insn_gen_nop();
+
+		if (le32_to_cpu(*(__le32 *)addr) != nop)
+			addr += AARCH64_INSN_SIZE;
+	}
+
+	/* Skip the first NOP within the function */
+	addr += AARCH64_INSN_SIZE;
+
+	return addr;
+}
+
 /*
  * The compiler has inserted two NOPs before the regular function prologue.
  * All instrumented functions follow the AAPCS, so x0-x8 and x19-x30 are live,
@@ -196,11 +251,26 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 	unsigned long pc = rec->ip;
 	u32 old = 0, new;
 
+	new = aarch64_insn_gen_nop();
+
+	/*
+	 * When using mcount, callsites in modules may have been initalized to
+	 * call an arbitrary module PLT (which redirects to the _mcount stub)
+	 * rather than the ftrace PLT we'll use at runtime (which redirects to
+	 * the ftrace trampoline). We can ignore the old PLT when initializing
+	 * the callsite.
+	 *
+	 * Note: 'mod' is only set at module load time.
+	 */
+	if (!IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_ARGS) &&
+	    IS_ENABLED(CONFIG_ARM64_MODULE_PLTS) && mod) {
+		return aarch64_insn_patch_text_nosync((void *)pc, new);
+	}
+
 	if (!ftrace_find_callable_addr(rec, mod, &addr))
 		return -EINVAL;
 
 	old = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
-	new = aarch64_insn_gen_nop();
 
 	return ftrace_modify_code(pc, old, new, true);
 }
