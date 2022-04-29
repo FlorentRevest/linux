@@ -120,6 +120,7 @@ config ARM64
 	select DMA_DIRECT_REMAP
 	select EDAC_SUPPORT
 	select FRAME_POINTER
+	select FUNCTION_ALIGNMENT_8B if DYNAMIC_FTRACE_WITH_ARGS
 	select GENERIC_ALLOCATOR
 	select GENERIC_ARCH_TOPOLOGY
 	select GENERIC_CLOCKEVENTS_BROADCAST
@@ -243,7 +244,7 @@ config CLANG_SUPPORTS_DYNAMIC_FTRACE_WITH_ARGS
 
 config GCC_SUPPORTS_DYNAMIC_FTRACE_WITH_ARGS
 	def_bool CC_IS_GCC
-	depends on $(cc-option,-fpatchable-function-entry=2)
+	depends on $(cc-option,-fpatchable-function-entry=4,2)
 	select HAVE_DYNAMIC_FTRACE_WITH_ARGS
 
 config 64BIT
