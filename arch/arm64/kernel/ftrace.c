@@ -17,6 +17,21 @@
 #include <asm/insn.h>
 #include <asm/patching.h>
 
+static const struct ftrace_ops *arm64_rec_get_ops(struct dyn_ftrace *rec)
+{
+	const struct ftrace_ops *ops = NULL;
+
+	if (rec->flags & FTRACE_FL_CALL_OPS_EN) {
+		ops = ftrace_find_unique_ops(rec);
+		WARN_ON_ONCE(!ops);
+	}
+
+	if (!ops)
+		ops = &ftrace_list_ops;
+
+	return ops;
+}
+
 #ifdef CONFIG_DYNAMIC_FTRACE
 /*
  * Replace a single instruction, which may be a branch or NOP.
@@ -53,6 +68,9 @@ static int ftrace_modify_code(unsigned long pc, u32 old, u32 new,
  */
 int ftrace_update_ftrace_func(ftrace_func_t func)
 {
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS
+	return 0;
+#else
 	unsigned long pc;
 	u32 new;
 
@@ -61,6 +79,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 					  AARCH64_INSN_BRANCH_LINK);
 
 	return ftrace_modify_code(pc, 0, new, false);
+#endif
 }
 
 static struct plt_entry *get_ftrace_plt(struct module *mod, unsigned long addr)
@@ -134,13 +153,29 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
 	return true;
 }
 
+/* TODO: rework this API, place something in a header */
+int aarch64_insn_write_u64(void *addr, u64 val);
+
+static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
+			      const struct ftrace_ops *ops)
+{
+	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
+	return aarch64_insn_write_u64((void *)literal, (unsigned long)ops);
+}
+
 /*
  * Turn on the call to ftrace_caller() in instrumented function
  */
 int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 {
 	unsigned long pc = rec->ip;
+	const struct ftrace_ops *ops;
 	u32 old, new;
+
+	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
+		ops = arm64_rec_get_ops(rec);
+		ftrace_rec_set_ops(rec, ops);
+	}
 
 	if (!ftrace_find_callable_addr(rec, NULL, &addr))
 		return -EINVAL;
@@ -152,6 +187,18 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 }
 
 #ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
+int ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
+		       unsigned long addr)
+{
+	if (WARN_ON_ONCE(addr != old_addr))
+		return -EINVAL;
+
+	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS))
+		return ftrace_rec_set_ops(rec, arm64_rec_get_ops(rec));
+
+	return -EINVAL;
+}
+
 unsigned long ftrace_call_adjust(unsigned long addr)
 {
 	/*
@@ -233,6 +280,11 @@ int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec)
 {
 	unsigned long pc = rec->ip - AARCH64_INSN_SIZE;
 	u32 old, new;
+	int ret;
+
+	ret = ftrace_rec_set_ops(rec, &ftrace_list_ops);
+	if (ret)
+		return ret;
 
 	old = aarch64_insn_gen_nop();
 	new = aarch64_insn_gen_move_reg(AARCH64_INSN_REG_9,
@@ -250,8 +302,15 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 {
 	unsigned long pc = rec->ip;
 	u32 old = 0, new;
+	int ret;
 
 	new = aarch64_insn_gen_nop();
+
+	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
+		ret = ftrace_rec_set_ops(rec, &ftrace_list_ops);
+		if (ret)
+			return ret;
+	}
 
 	/*
 	 * When using mcount, callsites in modules may have been initalized to
