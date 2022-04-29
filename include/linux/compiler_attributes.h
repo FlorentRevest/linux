@@ -78,7 +78,11 @@
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-cold-function-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Label-Attributes.html#index-cold-label-attribute
  */
-#define __cold                          __attribute__((__cold__))
+#if 0
+# define __cold                          __attribute__((__cold__))
+#else
+# define __cold                          __attribute__((__cold__)) __aligned(8)
+#endif
 
 /*
  * Note the long name.

@@ -151,7 +151,63 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 	return ftrace_modify_code(pc, old, new, true);
 }
 
+unsigned long ftrace_call_adjust(unsigned long addr)
+{
+	/*
+	 * When using mcount, addr is the address of the mcount call
+	 * instruction, and no adjustment is necessary.
+	 */
+	if (!IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_ARGS))
+		return addr;
+
+	/*
+	 * Starting from an 8-byte aligned base, the compiler has either
+	 * generated:
+	 *
+	 * +00:		NOP		// Literal (first 32 bits)
+	 * +04:		NOP		// Literal (last 32 bits)
+	 * +08:	func:	NOP		// To be patched to MOV X9, LR
+	 * +12:		NOP		// To be patched to BL <caller>
+	 *
+	 * Or:
+	 *
+	 * +00:		NOP		// Literal (first 32 bits)
+	 * +04:		NOP		// Literal (last 32 bits)
+	 * +08:	func:	BTI	C
+	 * +12:		NOP		// To be patched to MOV X9, LR
+	 * +16:		NOP		// To be patched to BL <caller>
+	 *
+	 * In either case, the compiler has recorded the address of the first
+	 * NOP, which is before the function entry point.
+	 *
+	 * We want to adjust 'addr' to be the address of the NOP which will be
+	 * patched with the ftrace call.
+	 */
+
+	if (!IS_ALIGNED(addr, sizeof(unsigned long))) {
+		WARN(1, "%s: unaligned literal for %pS\n",
+		     __func__, (void *)(addr + 8));
+	}
+
+	/* Skip the NOPs placed before the function entry point */
+	addr += 2 * AARCH64_INSN_SIZE;
+
+	/* Skip any BTI */
+	if (IS_ENABLED(CONFIG_ARM64_BTI_KERNEL)) {
+		u32 nop = aarch64_insn_gen_nop();
+
+		if (le32_to_cpu(*(__le32 *)addr) != nop)
+			addr += AARCH64_INSN_SIZE;
+	}
+
+	/* Skip the first NOP within the function */
+	addr += AARCH64_INSN_SIZE;
+
+	return addr;
+}
+
 #ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
+
 /*
  * The compiler has inserted two NOPs before the regular function prologue.
  * All instrumented functions follow the AAPCS, so x0-x8 and x19-x30 are live,
