@@ -17,6 +17,13 @@
 #include <asm/insn.h>
 #include <asm/patching.h>
 
+/*
+ * HACK HACK HACK HEAC HACK HRAAK HAAK HACK HRACK HRACK HRACK HACK
+ */
+static const struct ftrace_ops arm64_default_ftrace_ops = {
+	.func = arch_ftrace_ops_list_func,
+};
+
 #ifdef CONFIG_DYNAMIC_FTRACE
 /*
  * Replace a single instruction, which may be a branch or NOP.
@@ -233,7 +240,13 @@ unsigned long ftrace_call_adjust(unsigned long addr)
 int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec)
 {
 	unsigned long pc = rec->ip - AARCH64_INSN_SIZE;
+	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
 	u32 old, new;
+
+	/*
+	 * TODO: mess with protection to set this
+	 */
+	*(const struct ftrace_ops **)literal = &arm64_default_ftrace_ops;
 
 	old = aarch64_insn_gen_nop();
 	new = aarch64_insn_gen_move_reg(AARCH64_INSN_REG_9,
