@@ -61,6 +61,9 @@
 	str	x29, [sp, #S_FP]
 	.endif
 
+	/* Set orig_x0 to zero  */
+	str     xzr, [sp, #S_ORIG_X0]
+
 	/* Save the callsite's SP and LR */
 	add	x10, sp, #(PT_REGS_SIZE + 16)
 	stp	x9, x10, [sp, #S_LR]
@@ -113,12 +116,21 @@ SYM_INNER_LABEL(ftrace_call, SYM_L_GLOBAL)
 	/* Restore the callsite's FP, LR, PC */
 	ldr	x29, [sp, #S_FP]
 	ldr	x30, [sp, #S_LR]
-	ldr	x9, [sp, #S_PC]
+	ldr	x10, [sp, #S_PC]
 
+	ldr	x11, [sp, #S_ORIG_X0]
+	cbz	x11, 1f
+	/* Set x9 to parent ip before jump to custom trampoline */
+	mov	x9,  x30
+	/* Set lr to self ip */
+	ldr	x30, [sp, #S_PC]
+	/* Set x10 (used for return address) to custom trampoline */
+	mov	x10, x11
+1:
 	/* Restore the callsite's SP */
 	add	sp, sp, #PT_REGS_SIZE + 16
 
-	ret	x9
+	ret	x10
 SYM_CODE_END(ftrace_common)
 
 #else /* CONFIG_DYNAMIC_FTRACE_WITH_REGS */
