@@ -10,13 +10,17 @@
 /* This is called from arch_rethook_trampoline() */
 unsigned long __used arch_rethook_trampoline_callback(struct ftrace_regs *regs)
 {
-	return rethook_trampoline_handler(regs, regs->regs.regs[29]);
+	return rethook_trampoline_handler(regs, regs->fp);
 }
 NOKPROBE_SYMBOL(arch_rethook_trampoline_callback);
 
 void arch_rethook_prepare(struct rethook_node *rhn, struct ftrace_regs *regs, bool mcount)
 {
-	arch_rethook_prepare_regs(rhn, &regs->regs, mcount);
+	rhn->ret_addr = regs->lr;
+	rhn->frame = regs->fp;
+
+	/* replace return addr (x30) with trampoline */
+	regs->lr = (u64)arch_rethook_trampoline;
 }
 NOKPROBE_SYMBOL(arch_rethook_prepare);
 

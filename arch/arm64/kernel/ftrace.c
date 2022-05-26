@@ -70,9 +70,6 @@ static struct plt_entry *get_ftrace_plt(struct module *mod, unsigned long addr)
 
 	if (addr == FTRACE_ADDR)
 		return &plt[FTRACE_PLT_IDX];
-	if (addr == FTRACE_REGS_ADDR &&
-	    IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_REGS))
-		return &plt[FTRACE_REGS_PLT_IDX];
 #endif
 	return NULL;
 }
@@ -154,25 +151,7 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 	return ftrace_modify_code(pc, old, new, true);
 }
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
-int ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
-			unsigned long addr)
-{
-	unsigned long pc = rec->ip;
-	u32 old, new;
-
-	if (!ftrace_find_callable_addr(rec, NULL, &old_addr))
-		return -EINVAL;
-	if (!ftrace_find_callable_addr(rec, NULL, &addr))
-		return -EINVAL;
-
-	old = aarch64_insn_gen_branch_imm(pc, old_addr,
-					  AARCH64_INSN_BRANCH_LINK);
-	new = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
-
-	return ftrace_modify_code(pc, old, new, true);
-}
-
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
 /*
  * The compiler has inserted two NOPs before the regular function prologue.
  * All instrumented functions follow the AAPCS, so x0-x8 and x19-x30 are live,
@@ -264,19 +243,13 @@ void prepare_ftrace_return(unsigned long self_addr, unsigned long *parent,
 
 #ifdef CONFIG_DYNAMIC_FTRACE
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
 void ftrace_graph_func(unsigned long ip, unsigned long parent_ip,
 		       struct ftrace_ops *op, struct ftrace_regs *fregs)
 {
-	/*
-	 * When DYNAMIC_FTRACE_WITH_REGS is selected, `fregs` can never be NULL
-	 * and arch_ftrace_get_regs(fregs) will always give a non-NULL pt_regs
-	 * in which we can safely modify the LR.
-	 */
-	struct pt_regs *regs = arch_ftrace_get_regs(fregs);
-	unsigned long *parent = (unsigned long *)&procedure_link_pointer(regs);
+	unsigned long *parent = (unsigned long *)&ftrace_regs_lr(fregs);
 
-	prepare_ftrace_return(ip, parent, frame_pointer(regs));
+	prepare_ftrace_return(ip, parent, ftrace_regs_fp(fregs));
 }
 #else
 /*
@@ -308,6 +281,6 @@ int ftrace_disable_ftrace_graph_caller(void)
 {
 	return ftrace_modify_graph_caller(false);
 }
-#endif /* CONFIG_DYNAMIC_FTRACE_WITH_REGS */
+#endif /* CONFIG_DYNAMIC_FTRACE_WITH_ARGS */
 #endif /* CONFIG_DYNAMIC_FTRACE */
 #endif /* CONFIG_FUNCTION_GRAPH_TRACER */

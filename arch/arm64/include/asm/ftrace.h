@@ -23,7 +23,7 @@
  */
 #define HAVE_FUNCTION_GRAPH_RET_ADDR_PTR
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
 #define ARCH_SUPPORTS_FTRACE_OPS 1
 #else
 #define MCOUNT_ADDR		((unsigned long)function_nocfi(_mcount))
@@ -33,8 +33,7 @@
 #define MCOUNT_INSN_SIZE	AARCH64_INSN_SIZE
 
 #define FTRACE_PLT_IDX		0
-#define FTRACE_REGS_PLT_IDX	1
-#define NR_FTRACE_PLTS		2
+#define NR_FTRACE_PLTS		1
 
 /*
  * Currently, gcc tends to save the link register after the local variables
@@ -69,7 +68,7 @@ static inline unsigned long ftrace_call_adjust(unsigned long addr)
 	 * Adjust addr to point at the BL in the callsite.
 	 * See ftrace_init_nop() for the callsite sequence.
 	 */
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_REGS))
+	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_ARGS))
 		return addr + AARCH64_INSN_SIZE;
 	/*
 	 * addr is the address of the mcount call instruction.
@@ -78,10 +77,69 @@ static inline unsigned long ftrace_call_adjust(unsigned long addr)
 	return addr;
 }
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
 struct dyn_ftrace;
 struct ftrace_ops;
-struct ftrace_regs;
+
+#define arch_ftrace_get_regs(regs) NULL
+
+struct ftrace_regs {
+	/* x0 - x8 */
+	unsigned long regs[9];
+	unsigned long __unused;
+
+	unsigned long fp;
+	unsigned long lr;
+
+	unsigned long sp;
+	unsigned long pc;
+};
+
+#define ftrace_regs_gpr(fregs, n)	((fregs)->regs[(n)])
+#define ftrace_regs_fp(fregs)		((fregs)->fp)
+#define ftrace_regs_lr(fregs)		((fregs)->lr)
+#define ftrace_regs_sp(fregs)		((fregs)->sp)
+#define ftrace_regs_pc(fregs)		((fregs)->pc)
+
+#define ftrace_instruction_pointer_set(fregs, _pc)	\
+	do { (fregs)->pc = (_pc); } while (0)
+
+#define ftrace_regs_get_argument(fregs, n) \
+	(n < 8 ? (fregs)->regs[(n)] : 0)
+#define ftrace_regs_get_stack_pointer(fregs) \
+	((fregs)->sp)
+#define ftrace_regs_instruction_pointer(fregs) \
+	((fregs)->pc)
+#define ftrace_regs_return_value(fregs)						\
+	((fregs)->regs[0])
+#define ftrace_regs_set_return_value(fregs, ret) \
+	do { (fregs)->regs[0] = (ret); } while (0)
+#define ftrace_override_function_with_return(fregs) \
+	((fregs)->pc = (fregs)->fp)
+#define pt_regs_from_ftrace_regs(fregs)											\
+({																				\
+	struct pt_regs __regs = {													\
+		.regs = { (fregs)->regs[0], (fregs)->regs[1], (fregs)->regs[2],			\
+				  (fregs)->regs[3], (fregs)->regs[4], (fregs)->regs[5],			\
+				  (fregs)->regs[6], (fregs)->regs[7], (fregs)->regs[8],			\
+				  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	\
+				  (fregs)->fp, (fregs)->lr },									\
+		.sp = (fregs)->sp,														\
+		.pc = (fregs)->pc,														\
+	};																			\
+	__regs;																		\
+})
+
+/*
+ * See regs_get_kernel_argument()
+ */
+static inline unsigned long
+ftrace_regs_get_kernel_argument(struct ftrace_regs *fregs, unsigned int n)
+{
+	if (n < 8)
+		return ftrace_regs_gpr(fregs, n);
+	return 0;
+}
 
 int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec);
 #define ftrace_init_nop ftrace_init_nop
