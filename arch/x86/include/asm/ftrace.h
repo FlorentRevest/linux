@@ -42,8 +42,10 @@ static inline unsigned long ftrace_call_adjust(unsigned long addr)
  * place the direct caller in the ORIG_AX part of pt_regs. This
  * tells the ftrace_caller that there's a direct caller.
  */
-static inline void arch_ftrace_set_direct_caller(struct pt_regs *regs, unsigned long addr)
+static inline void arch_ftrace_set_direct_caller(struct ftrace_regs *fregs, unsigned long addr)
 {
+	struct pt_regs *regs = ftrace_get_regs(fregs);
+
 	/* Emulate a call */
 	regs->orig_ax = addr;
 }
