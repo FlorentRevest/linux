@@ -82,8 +82,9 @@ static __always_inline void ftrace_instruction_pointer_set(struct ftrace_regs *f
  * place the direct caller in the ORIG_GPR2 part of pt_regs. This
  * tells the ftrace_caller that there's a direct caller.
  */
-static inline void arch_ftrace_set_direct_caller(struct pt_regs *regs, unsigned long addr)
+static inline void arch_ftrace_set_direct_caller(struct ftrace_regs *fregs, unsigned long addr)
 {
+	struct pt_regs *regs = ftrace_get_regs(fregs);
 	regs->orig_gpr2 = addr;
 }
 
