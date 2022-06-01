@@ -319,6 +319,14 @@
 #define __section(section)              __attribute__((__section__(section)))
 
 /*
+ * GCC evidently ignores the effects of -falign-functions=n when placing a
+ * function into a separate section. Remind it.
+ *
+ * TODO: make this an ARCH_MIN_FUNCTION_ALIGNMENT or similar.
+ */
+#define __text_section(section)		__section(section)	__aligned(8)
+
+/*
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-unused-function-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Type-Attributes.html#index-unused-type-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Variable-Attributes.html#index-unused-variable-attribute

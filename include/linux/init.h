@@ -47,7 +47,7 @@
 
 /* These are for everybody (although not all archs will actually
    discard it in modules) */
-#define __init		__section(".init.text") __cold  __latent_entropy __noinitretpoline __nocfi
+#define __init		__text_section(".init.text") __cold  __latent_entropy __noinitretpoline __nocfi
 #define __initdata	__section(".init.data")
 #define __initconst	__section(".init.rodata")
 #define __exitdata	__section(".exit.data")
@@ -70,7 +70,7 @@
  *
  * The markers follow same syntax rules as __init / __initdata.
  */
-#define __ref            __section(".ref.text") noinline
+#define __ref            __text_section(".ref.text") noinline
 #define __refdata        __section(".ref.data")
 #define __refconst       __section(".ref.rodata")
 
@@ -80,14 +80,14 @@
 #define __exitused  __used
 #endif
 
-#define __exit          __section(".exit.text") __exitused __cold notrace
+#define __exit          __text_section(".exit.text") __exitused __cold notrace
 
 /* Used for MEMORY_HOTPLUG */
-#define __meminit        __section(".meminit.text") __cold notrace \
+#define __meminit        __text_section(".meminit.text") __cold notrace \
 						  __latent_entropy
 #define __meminitdata    __section(".meminit.data")
 #define __meminitconst   __section(".meminit.rodata")
-#define __memexit        __section(".memexit.text") __exitused __cold notrace
+#define __memexit        __text_section(".memexit.text") __exitused __cold notrace
 #define __memexitdata    __section(".memexit.data")
 #define __memexitconst   __section(".memexit.rodata")
 
@@ -247,7 +247,7 @@ extern bool initcall_debug;
 #else
 #define ____define_initcall(fn, __unused, __name, __sec)	\
 	static initcall_t __name __used 			\
-		__attribute__((__section__(__sec))) = fn;
+		__attribute__((__text_section__(__sec))) = fn;
 #endif
 
 #define __unique_initcall(fn, id, __sec, __iid)			\
