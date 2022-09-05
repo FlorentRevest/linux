@@ -327,3 +327,25 @@ SYM_CODE_START(return_to_handler)
 	ret
 SYM_CODE_END(return_to_handler)
 #endif /* CONFIG_FUNCTION_GRAPH_TRACER */
+
+SYM_CODE_START(bpf_return_to_handler)
+	/* save return value regs */
+	sub sp, sp, #64
+	stp x0, x1, [sp]
+	stp x2, x3, [sp, #16]
+	stp x4, x5, [sp, #32]
+	stp x6, x7, [sp, #48]
+
+	mov	x0, x29			//     parent's fp
+	bl	bpf_fexit_tramp
+	mov	x30, x0			// restore the original return address
+
+	/* restore return value regs */
+	ldp x0, x1, [sp]
+	ldp x2, x3, [sp, #16]
+	ldp x4, x5, [sp, #32]
+	ldp x6, x7, [sp, #48]
+	add sp, sp, #64
+
+	ret
+SYM_CODE_END(bpf_return_to_handler)

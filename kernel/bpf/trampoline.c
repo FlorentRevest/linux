@@ -103,6 +103,54 @@ static int bpf_tramp_ftrace_ops_func(struct ftrace_ops *ops, enum ftrace_ops_cmd
 	mutex_unlock(&tr->mutex);
 	return ret;
 }
+#else
+u64 bpf_fexit_tramp(void)
+{
+	int index = current->bpf_curr_ret_stack--;
+
+	unsigned long ret_addr = current->bpf_ret_stack[index].ret_addr;
+	struct bpf_trampoline *tr = current->bpf_ret_stack[index].tr;
+	struct ftrace_regs *fregs = &current->bpf_ret_stack[index].fregs;
+	struct pt_regs *regs = arch_ftrace_get_regs(fregs);
+
+	u64 (*image)(u64, u64, u64, u64, u64) =
+		(u64(*)(u64, u64, u64, u64, u64))tr->cur_image->image;
+
+	image(regs->regs[0], regs->regs[1], regs->regs[2],
+			regs->regs[3], regs->regs[4]);
+
+	return ret_addr;
+}
+
+void bpf_tramp_ftrace_func(unsigned long ip, unsigned long parent_ip,
+			   struct ftrace_ops *op, struct ftrace_regs *fregs)
+{
+	struct pt_regs *regs = arch_ftrace_get_regs(fregs);
+	struct bpf_trampoline *tr = op->private;
+	u64 (*image)(u64, u64, u64, u64, u64) =
+		(u64(*)(u64, u64, u64, u64, u64))tr->cur_image->image;
+
+	if (tr->flags == BPF_TRAMP_F_RESTORE_REGS) {
+		image(regs->regs[0], regs->regs[1], regs->regs[2],
+		      regs->regs[3], regs->regs[4]);
+	} else {
+		unsigned long ret_addr = procedure_link_pointer(regs);
+		int index;
+
+		if (!current->bpf_ret_stack ||
+		    current->bpf_curr_ret_stack == MAX) {
+			return;
+		}
+
+		index = ++current->bpf_curr_ret_stack;
+		current->bpf_ret_stack[index].ret_addr = ret_addr;
+		current->bpf_ret_stack[index].tr = tr;
+		memcpy(&current->bpf_ret_stack[index].fregs, fregs,
+		       sizeof(*fregs));
+
+		procedure_link_pointer(regs) = (u64)image;
+	}
+}
 #endif
 
 bool bpf_prog_has_trampoline(const struct bpf_prog *prog)
@@ -165,7 +213,6 @@ static struct bpf_trampoline *bpf_trampoline_lookup(u64 key)
 	tr = kzalloc(sizeof(*tr), GFP_KERNEL);
 	if (!tr)
 		goto out;
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	tr->fops = kzalloc(sizeof(struct ftrace_ops), GFP_KERNEL);
 	if (!tr->fops) {
 		kfree(tr);
@@ -173,7 +220,10 @@ static struct bpf_trampoline *bpf_trampoline_lookup(u64 key)
 		goto out;
 	}
 	tr->fops->private = tr;
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	tr->fops->ops_func = bpf_tramp_ftrace_ops_func;
+#else
+	tr->fops->func = bpf_tramp_ftrace_func;
 #endif
 
 	tr->key = key;
@@ -214,7 +264,11 @@ static int unregister_fentry(struct bpf_trampoline *tr, void *old_addr)
 	int ret;
 
 	if (tr->func.ftrace_managed)
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 		ret = unregister_ftrace_direct_multi(tr->fops, (long)old_addr);
+#else
+		ret = unregister_ftrace_function(tr->fops);
+#endif
 	else
 		ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, old_addr, NULL);
 
@@ -231,7 +285,11 @@ static int modify_fentry(struct bpf_trampoline *tr, void *old_addr, void *new_ad
 
 	if (tr->func.ftrace_managed) {
 		if (lock_direct_mutex)
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 			ret = modify_ftrace_direct_multi(tr->fops, (long)new_addr);
+#else
+			ret = 0;
+#endif
 		else
 			ret = modify_ftrace_direct_multi_nolock(tr->fops, (long)new_addr);
 	} else {
@@ -259,7 +317,11 @@ static int register_fentry(struct bpf_trampoline *tr, void *new_addr)
 
 	if (tr->func.ftrace_managed) {
 		ftrace_set_filter_ip(tr->fops, (unsigned long)ip, 0, 1);
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 		ret = register_ftrace_direct_multi(tr->fops, (long)new_addr);
+#else
+		ret = register_ftrace_function(tr->fops);
+#endif
 	} else {
 		ret = bpf_arch_text_poke(ip, BPF_MOD_CALL, NULL, new_addr);
 	}
@@ -432,7 +494,7 @@ static int bpf_trampoline_update(struct bpf_trampoline *tr, bool lock_direct_mut
 {
 	struct bpf_tramp_image *im;
 	struct bpf_tramp_links *tlinks;
-	u32 orig_flags = tr->flags;
+	u32 orig_flags = tr->flags, flags;
 	bool ip_arg = false;
 	int err, total;
 
@@ -477,8 +539,14 @@ again:
 		tr->flags |= BPF_TRAMP_F_ORIG_STACK;
 #endif
 
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
+	flags = tr->flags;
+#else
+	flags = 0;
+#endif
+
 	err = arch_prepare_bpf_trampoline(im, im->image, im->image + PAGE_SIZE,
-					  &tr->func.model, tr->flags, tlinks,
+					  &tr->func.model, flags, tlinks,
 					  tr->func.addr);
 	if (err < 0)
 		goto out;

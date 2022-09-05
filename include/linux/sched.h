@@ -1467,6 +1467,14 @@ struct task_struct {
 	struct bpf_local_storage __rcu	*bpf_storage;
 	/* Used for BPF run context */
 	struct bpf_run_ctx		*bpf_ctx;
+
+#if defined(CONFIG_BPF_JIT) && !defined(CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS)
+	/* Index of current stored address in bpf_ret_stack: */
+	int				bpf_curr_ret_stack;
+
+	/* Stack of return addresses for fexit programs: */
+	struct bpf_tramp_ret_stack *bpf_ret_stack;
+#endif
 #endif
 
 #ifdef CONFIG_GCC_PLUGIN_STACKLEAK

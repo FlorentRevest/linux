@@ -11,6 +11,7 @@
 #include <linux/file.h>
 #include <linux/percpu.h>
 #include <linux/err.h>
+#include <linux/ftrace.h>
 #include <linux/rbtree_latch.h>
 #include <linux/numa.h>
 #include <linux/mm_types.h>
@@ -812,6 +813,12 @@ void notrace __bpf_prog_exit_lsm_cgroup(struct bpf_prog *prog, u64 start,
 					struct bpf_tramp_run_ctx *run_ctx);
 void notrace __bpf_tramp_enter(struct bpf_tramp_image *tr);
 void notrace __bpf_tramp_exit(struct bpf_tramp_image *tr);
+
+struct bpf_tramp_ret_stack {
+	unsigned long ret_addr;
+	struct bpf_trampoline *tr;
+	struct ftrace_regs fregs;
+};
 
 struct bpf_ksym {
 	unsigned long		 start;
