@@ -178,7 +178,7 @@ static int entry_run(struct ftrace_graph_ent *trace, struct fgraph_ops *ops)
 }
 
 /* ftrace_graph_return set to this to tell some archs to run function graph */
-static void return_run(struct ftrace_graph_ret *trace, struct fgraph_ops *ops)
+static void return_run(struct ftrace_graph_ret *trace, struct fgraph_ops *ops, void *ret_ptr)
 {
 	return;
 }
@@ -384,7 +384,7 @@ int ftrace_graph_entry_stub(struct ftrace_graph_ent *trace,
 }
 
 static void ftrace_graph_ret_stub(struct ftrace_graph_ret *trace,
-				  struct fgraph_ops *gops)
+				  struct fgraph_ops *gops, void *ret_ptr)
 {
 }
 
@@ -514,7 +514,8 @@ ftrace_push_return_trace(unsigned long ret, unsigned long func,
 #endif
 
 int function_graph_enter(unsigned long ret, unsigned long func,
-			 unsigned long frame_pointer, unsigned long *retp)
+			 unsigned long frame_pointer, unsigned long *retp,
+			 struct ftrace_regs *fregs)
 {
 	struct ftrace_graph_ent trace;
 	int save_curr_ret_stack;
@@ -538,6 +539,7 @@ int function_graph_enter(unsigned long ret, unsigned long func,
 #endif
 	trace.func = func;
 	trace.depth = ++current->curr_ret_depth;
+	trace.fregs = fregs;
 
 	if (ftrace_push_return_trace(ret, func, frame_pointer, retp))
 		goto out;
@@ -701,7 +703,7 @@ static struct notifier_block ftrace_suspend_notifier = {
  * Send the trace to the ring-buffer.
  * @return the original return address.
  */
-unsigned long ftrace_return_to_handler(unsigned long frame_pointer)
+unsigned long ftrace_return_to_handler(unsigned long frame_pointer, void *ret_ptr)
 {
 	struct ftrace_ret_stack *ret_stack;
 	struct ftrace_graph_ret trace;
@@ -735,7 +737,7 @@ unsigned long ftrace_return_to_handler(unsigned long frame_pointer)
 		switch (__get_type(val)) {
 		case FGRAPH_TYPE_ARRAY:
 			idx = __get_array(val);
-			fgraph_array[idx]->retfunc(&trace, fgraph_array[idx]);
+			fgraph_array[idx]->retfunc(&trace, fgraph_array[idx], ret_ptr);
 			fallthrough;
 		case FGRAPH_TYPE_RESERVED:
 			curr_ret_stack++;
@@ -877,7 +879,7 @@ void ftrace_graph_sleep_time_control(bool enable)
  * Simply points to ftrace_stub, but with the proper protocol.
  * Defined by the linker script in linux/vmlinux.lds.h
  */
-extern void ftrace_stub_graph(struct ftrace_graph_ret *, struct fgraph_ops *ops);
+extern void ftrace_stub_graph(struct ftrace_graph_ret *, struct fgraph_ops *ops, void *ret_ptr);
 
 /* The callbacks that hook a function */
 trace_func_graph_ret_t ftrace_graph_return = ftrace_stub_graph;

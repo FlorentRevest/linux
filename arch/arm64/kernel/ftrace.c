@@ -241,7 +241,7 @@ void arch_ftrace_update_code(int command)
  * the call stack to return_to_handler.
  */
 void prepare_ftrace_return(unsigned long self_addr, unsigned long *parent,
-			   unsigned long frame_pointer)
+			   unsigned long frame_pointer, struct ftrace_regs *fregs)
 {
 	unsigned long return_hooker = (unsigned long)&return_to_handler;
 	unsigned long old;
@@ -257,7 +257,7 @@ void prepare_ftrace_return(unsigned long self_addr, unsigned long *parent,
 	old = *parent;
 
 	if (!function_graph_enter(old, self_addr, frame_pointer,
-	    (void *)frame_pointer)) {
+	    (void *)frame_pointer, fregs)) {
 		*parent = return_hooker;
 	}
 }
@@ -276,7 +276,7 @@ void ftrace_graph_func(unsigned long ip, unsigned long parent_ip,
 	struct pt_regs *regs = arch_ftrace_get_regs(fregs);
 	unsigned long *parent = (unsigned long *)&procedure_link_pointer(regs);
 
-	prepare_ftrace_return(ip, parent, frame_pointer(regs));
+	prepare_ftrace_return(ip, parent, frame_pointer(regs), fregs);
 }
 #else
 /*

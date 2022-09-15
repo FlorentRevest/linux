@@ -642,7 +642,7 @@ void trace_latency_header(struct seq_file *m);
 void trace_default_header(struct seq_file *m);
 void print_trace_header(struct seq_file *m, struct trace_iterator *iter);
 
-void trace_graph_return(struct ftrace_graph_ret *trace, struct fgraph_ops *gops);
+void trace_graph_return(struct ftrace_graph_ret *trace, struct fgraph_ops *gops, void *ret_ptr);
 int trace_graph_entry(struct ftrace_graph_ent *trace, struct fgraph_ops *gops);
 void set_graph_array(struct trace_array *tr);
 
@@ -971,9 +971,6 @@ ftrace_graph_ignore_func(struct fgraph_ops *gops, struct ftrace_graph_ent *trace
 		(trace->depth < 0) ||
 		(fgraph_max_depth && trace->depth >= fgraph_max_depth);
 }
-
-void fgraph_init_ops(struct ftrace_ops *dst_ops,
-		     struct ftrace_ops *src_ops);
 
 #else /* CONFIG_FUNCTION_GRAPH_TRACER */
 static inline enum print_line_t

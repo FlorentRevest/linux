@@ -986,6 +986,7 @@ static inline void ftrace_init(void) { }
 struct ftrace_graph_ent {
 	unsigned long func; /* Current function */
 	int depth;
+	struct ftrace_regs *fregs;
 } __packed;
 
 /*
@@ -1006,7 +1007,7 @@ struct fgraph_ops;
 
 /* Type of the callback handlers for tracing function graph*/
 typedef void (*trace_func_graph_ret_t)(struct ftrace_graph_ret *,
-				       struct fgraph_ops *); /* return */
+				       struct fgraph_ops *, void *ret); /* return */
 typedef int (*trace_func_graph_ent_t)(struct ftrace_graph_ent *,
 				      struct fgraph_ops *); /* entry */
 
@@ -1024,6 +1025,9 @@ struct fgraph_ops {
 
 void *fgraph_reserve_data(int size_bytes);
 void *fgraph_retrieve_data(void);
+
+void fgraph_init_ops(struct ftrace_ops *dst_ops,
+		     struct ftrace_ops *src_ops);
 
 /*
  * Stack of return addresses for functions
@@ -1054,7 +1058,8 @@ extern void return_to_handler(void);
 
 extern int
 function_graph_enter(unsigned long ret, unsigned long func,
-		     unsigned long frame_pointer, unsigned long *retp);
+			 unsigned long frame_pointer, unsigned long *retp,
+			 struct ftrace_regs *fregs);
 
 struct ftrace_ret_stack *
 ftrace_graph_get_ret_stack(struct task_struct *task, int idx);
@@ -1064,7 +1069,8 @@ unsigned long ftrace_graph_ret_addr(struct task_struct *task, int *idx,
 unsigned long *fgraph_get_task_var(struct fgraph_ops *gops);
 
 int function_graph_enter(unsigned long ret, unsigned long func,
-			 unsigned long frame_pointer, unsigned long *retp);
+			 unsigned long frame_pointer, unsigned long *retp,
+			 struct ftrace_regs *fregs);
 /*
  * Sometimes we don't want to trace a function with the function
  * graph tracer but we want them to keep traced by the usual function

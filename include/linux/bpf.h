@@ -845,7 +845,11 @@ struct bpf_tramp_image {
 struct bpf_trampoline {
 	/* hlist for trampoline_table */
 	struct hlist_node hlist;
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	struct ftrace_ops *fops;
+#else
+	struct fgraph_ops *gops;
+#endif
 	/* serializes access to fields of this trampoline */
 	struct mutex mutex;
 	refcount_t refcnt;
