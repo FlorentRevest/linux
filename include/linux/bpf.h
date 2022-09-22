@@ -11,6 +11,7 @@
 #include <linux/file.h>
 #include <linux/percpu.h>
 #include <linux/err.h>
+#include <linux/fprobe.h>
 #include <linux/rbtree_latch.h>
 #include <linux/numa.h>
 #include <linux/mm_types.h>
@@ -898,7 +899,11 @@ struct bpf_tramp_image {
 struct bpf_trampoline {
 	/* hlist for trampoline_table */
 	struct hlist_node hlist;
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	struct ftrace_ops *fops;
+#else
+	struct fprobe probe;
+#endif
 	/* serializes access to fields of this trampoline */
 	struct mutex mutex;
 	refcount_t refcnt;
