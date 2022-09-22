@@ -103,6 +103,95 @@ static int bpf_tramp_ftrace_ops_func(struct ftrace_ops *ops, enum ftrace_ops_cmd
 	mutex_unlock(&tr->mutex);
 	return ret;
 }
+#else
+static unsigned int call_bpf_prog(struct bpf_tramp_link *l,
+				  struct bpf_tramp_run_ctx *ctx, u64 *args)
+{
+	u64 (*enter)(struct bpf_prog *prog,
+		     struct bpf_tramp_run_ctx *run_ctx) = __bpf_prog_enter;
+	void (*exit)(struct bpf_prog *prog, u64 start,
+		     struct bpf_tramp_run_ctx *run_ctx) = __bpf_prog_exit;
+	struct bpf_prog *p = l->link.prog;
+	unsigned int ret;
+	u64 start_time;
+
+	if (p->aux->sleepable) {
+		enter = __bpf_prog_enter_sleepable;
+		exit = __bpf_prog_exit_sleepable;
+	} else if (p->expected_attach_type == BPF_LSM_CGROUP) {
+		enter = __bpf_prog_enter_lsm_cgroup;
+		exit = __bpf_prog_exit_lsm_cgroup;
+	}
+
+	ctx->bpf_cookie = l->cookie;
+
+	start_time = enter(p, ctx);
+	if (!start_time)
+		return 0;
+
+	ret = p->bpf_func(args, p->insnsi);
+
+	exit(p, start_time, ctx);
+
+	return ret;
+}
+
+struct bpf_fprobe_context {
+	struct bpf_tramp_links *links;
+	int nr_args;
+};
+
+struct bpf_fprobe_call_context {
+	struct bpf_tramp_run_ctx ctx;
+	u64 ip; // This is expected to be here by bpf_get_func_ip
+	u64 args[7];
+};
+
+static void bpf_fprobe_entry(struct fprobe *fp, unsigned long ip, struct ftrace_regs *regs, void *private)
+{
+	struct bpf_fprobe_call_context *call_ctx = private;
+	struct bpf_fprobe_context *fprobe_ctx = fp->ops.private;
+	struct bpf_tramp_links *links = fprobe_ctx->links;
+	struct bpf_tramp_links *fentry = &links[BPF_TRAMP_FENTRY];
+	struct bpf_tramp_links *fmod_ret = &links[BPF_TRAMP_MODIFY_RETURN];
+	int i, ret;
+
+	memset(&call_ctx->ctx, 0, sizeof(call_ctx->ctx));
+	call_ctx->ip = ip;
+	for (i = 0; i < fprobe_ctx->nr_args; i++)
+		call_ctx->args[i] = ftrace_regs_get_argument(regs, i);
+
+	for (i = 0; i < fentry->nr_links; i++)
+		call_bpf_prog(fentry->links[i], &call_ctx->ctx, call_ctx->args);
+
+	call_ctx->args[fprobe_ctx->nr_args] = 0;
+	for (i = 0; i < fmod_ret->nr_links; i++) {
+		ret = call_bpf_prog(fmod_ret->links[i], &call_ctx->ctx,
+				      call_ctx->args);
+
+		if (ret) {
+			ftrace_regs_set_return_value(regs, ret);
+			ftrace_override_function_with_return(regs);
+			break;
+		}
+	}
+
+	return;
+}
+
+static void bpf_fprobe_exit(struct fprobe *fp, unsigned long ip, struct ftrace_regs *regs, void *private)
+{
+	struct bpf_fprobe_call_context *call_ctx = private;
+	struct bpf_fprobe_context *fprobe_ctx = fp->ops.private;
+	struct bpf_tramp_links *links = fprobe_ctx->links;
+	struct bpf_tramp_links *fexit = &links[BPF_TRAMP_FEXIT];
+	int i;
+
+	call_ctx->args[fprobe_ctx->nr_args] = ftrace_regs_return_value(regs);
+
+	for (i = 0; i < fexit->nr_links; i++)
+		call_bpf_prog(fexit->links[i], &call_ctx->ctx, call_ctx->args);
+}
 #endif
 
 bool bpf_prog_has_trampoline(const struct bpf_prog *prog)
@@ -174,6 +263,10 @@ static struct bpf_trampoline *bpf_trampoline_lookup(u64 key)
 	}
 	tr->fops->private = tr;
 	tr->fops->ops_func = bpf_tramp_ftrace_ops_func;
+#else
+	tr->probe.private_size = sizeof(struct bpf_fprobe_call_context);
+	tr->probe.entry_handler = &bpf_fprobe_entry;
+	tr->probe.exit_handler = &bpf_fprobe_exit;
 #endif
 
 	tr->key = key;
@@ -188,6 +281,7 @@ out:
 	return tr;
 }
 
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 static int bpf_trampoline_module_get(struct bpf_trampoline *tr)
 {
 	struct module *mod;
@@ -268,6 +362,7 @@ static int register_fentry(struct bpf_trampoline *tr, void *new_addr)
 		bpf_trampoline_module_put(tr);
 	return ret;
 }
+#endif
 
 static struct bpf_tramp_links *
 bpf_trampoline_get_progs(const struct bpf_trampoline *tr, int *total, bool *ip_arg)
@@ -295,6 +390,7 @@ bpf_trampoline_get_progs(const struct bpf_trampoline *tr, int *total, bool *ip_a
 	return tlinks;
 }
 
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 static void __bpf_tramp_image_put_deferred(struct work_struct *work)
 {
 	struct bpf_tramp_image *im;
@@ -470,12 +566,10 @@ static int bpf_trampoline_update(struct bpf_trampoline *tr, bool lock_direct_mut
 	if (ip_arg)
 		tr->flags |= BPF_TRAMP_F_IP_ARG;
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 again:
 	if ((tr->flags & BPF_TRAMP_F_SHARE_IPMODIFY) &&
 	    (tr->flags & BPF_TRAMP_F_CALL_ORIG))
 		tr->flags |= BPF_TRAMP_F_ORIG_STACK;
-#endif
 
 	err = arch_prepare_bpf_trampoline(im, im->image, im->image + PAGE_SIZE,
 					  &tr->func.model, tr->flags, tlinks,
@@ -492,7 +586,6 @@ again:
 		/* first time registering */
 		err = register_fentry(tr, im->image);
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	if (err == -EAGAIN) {
 		/* -EAGAIN from bpf_tramp_ftrace_ops_func. Now
 		 * BPF_TRAMP_F_SHARE_IPMODIFY is set, we can generate the
@@ -503,7 +596,6 @@ again:
 		tr->fops->trampoline = 0;
 		goto again;
 	}
-#endif
 	if (err)
 		goto out;
 
@@ -518,6 +610,39 @@ out:
 	kfree(tlinks);
 	return err;
 }
+#else
+static int bpf_trampoline_update(struct bpf_trampoline *tr,
+				 bool lock_direct_mutex)
+{
+	bool ip_arg, registered = tr->probe.ops.flags & FTRACE_OPS_FL_ENABLED;
+	struct bpf_fprobe_context *fprobe_ctx;
+	struct bpf_tramp_links *links;
+	int total, err = 0;
+
+	links = bpf_trampoline_get_progs(tr, &total, &ip_arg);
+	if (IS_ERR(links))
+		return PTR_ERR(links);
+
+	fprobe_ctx = kmalloc(sizeof(struct bpf_fprobe_context), GFP_KERNEL);
+	if (!fprobe_ctx)
+		return -1;
+
+	fprobe_ctx->links = links;
+	fprobe_ctx->nr_args = tr->func.model.nr_args;
+
+	// TODO: Properly lock this! (similar to trampoline images ?)
+	kfree(tr->probe.ops.private);
+	tr->probe.ops.private = fprobe_ctx;
+
+	if (total == 0)
+		err = unregister_fprobe(&tr->probe);
+	else if (!registered)
+		err = register_fprobe_ips(&tr->probe,
+					  (unsigned long *)(&tr->func.addr), 1);
+
+	return err;
+}
+#endif
 
 static enum bpf_tramp_prog_type bpf_attach_type_to_tramp(struct bpf_prog *prog)
 {
@@ -841,10 +966,14 @@ void bpf_trampoline_put(struct bpf_trampoline *tr)
 	 * multiple rcu callbacks.
 	 */
 	hlist_del(&tr->hlist);
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	if (tr->fops) {
 		ftrace_free_filter(tr->fops);
 		kfree(tr->fops);
 	}
+#else
+	kfree(tr->probe.ops.private);
+#endif
 	kfree(tr);
 out:
 	mutex_unlock(&trampoline_mutex);
