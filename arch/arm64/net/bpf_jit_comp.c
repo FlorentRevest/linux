@@ -1909,7 +1909,9 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 		/* store return value */
 		emit(A64_STR64I(A64_R(0), A64_SP, retval_off), ctx);
 		/* reserve a nop for bpf_tramp_image_put */
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 		im->ip_after_call = ctx->image + ctx->idx;
+#endif
 		emit(A64_NOP, ctx);
 	}
 
@@ -1924,7 +1926,9 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 				run_ctx_off, false);
 
 	if (flags & BPF_TRAMP_F_CALL_ORIG) {
+#ifdef CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 		im->ip_epilogue = ctx->image + ctx->idx;
+#endif
 		emit_addr_mov_i64(A64_R(0), (const u64)im, ctx);
 		emit_call((const u64)__bpf_tramp_exit, ctx);
 	}
