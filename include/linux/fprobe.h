@@ -29,9 +29,10 @@ struct fprobe {
 	unsigned long		nmissed;
 	unsigned int		flags;
 	struct rethook		*rethook;
+	size_t				private_size;
 
-	void (*entry_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs);
-	void (*exit_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs);
+	void (*entry_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
+	void (*exit_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
 };
 
 /* This fprobe is soft-disabled. */

@@ -33,6 +33,14 @@ and/or `exit_handler` as below.
         .exit_handler   = my_exit_callback,
  };
 
+If sharing data between the entry and exit handler is required, a private blob
+buffer size can be specified. The `private` pointer will then be provided to
+entry and exit handlers.
+
+.. code-block:: c
+
+ fp.private_size = sizeof(struct shared_blob);
+
 To enable the fprobe, call one of register_fprobe(), register_fprobe_ips(), and
 register_fprobe_syms(). These functions register the fprobe with different types
 of parameters.
@@ -91,7 +99,7 @@ The prototype of the entry/exit callback function is as follows:
 
 .. code-block:: c
 
- void callback_func(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs);
+ void callback_func(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
 
 Note that both entry and exit callbacks have same ptototype. The @entry_ip is
 saved at function entry and passed to exit handler.
@@ -112,6 +120,11 @@ saved at function entry and passed to exit handler.
         in the entry_handler. If you need traced instruction pointer, you need
         to use @entry_ip. On the other hand, in the exit_handler, the instruction
         pointer of @regs is set to the currect return address.
+
+@private
+        A pointer to a blob of data of size fp->private_size that can be shared
+        between the entry and exit callbacks of a same function call. NULL if
+        no exit callback is registered or if it could not be allocated.
 
 Share the callbacks with kprobes
 ================================

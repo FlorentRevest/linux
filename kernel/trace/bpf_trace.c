@@ -2422,7 +2422,7 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 
 static void
 kprobe_multi_link_handler(struct fprobe *fp, unsigned long entry_ip,
-			  struct ftrace_regs *regs)
+			  struct ftrace_regs *regs, void *private)
 {
 	struct bpf_kprobe_multi_link *link;
 
