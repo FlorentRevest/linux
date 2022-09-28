@@ -77,6 +77,8 @@ ftrace_regs_set_instruction_pointer(struct ftrace_regs *fregs,
 	regs_set_return_value(&(fregs)->regs, ret)
 #define ftrace_override_function_with_return(fregs) \
 	override_function_with_return(&(fregs)->regs)
+#define pt_regs_from_ftrace_regs(fregs) \
+	(fregs)->regs
 
 /*
  * When an ftrace registered caller is tracing a function that is

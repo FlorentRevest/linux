@@ -60,6 +60,8 @@ ftrace_regs_get_instruction_pointer(const struct ftrace_refs *fregs)
 	regs_set_return_value(&(fregs)->regs, ret)
 #define ftrace_override_function_with_return(fregs) \
 	override_function_with_return(&(fregs)->regs)
+#define pt_regs_from_ftrace_regs(fregs) \
+	(fregs)->regs
 
 struct ftrace_ops;
 
