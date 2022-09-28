@@ -49,7 +49,7 @@ static void show_backtrace(void)
 }
 
 static void sample_entry_handler(struct fprobe *fp, unsigned long ip,
-				 struct pt_regs *regs, void *data)
+				 struct ftrace_regs *regs, void *data)
 {
 	if (use_trace)
 		/*
@@ -64,10 +64,10 @@ static void sample_entry_handler(struct fprobe *fp, unsigned long ip,
 		show_backtrace();
 }
 
-static void sample_exit_handler(struct fprobe *fp, unsigned long ip, struct pt_regs *regs,
+static void sample_exit_handler(struct fprobe *fp, unsigned long ip, struct ftrace_regs *regs,
 			        void *data)
 {
-	unsigned long rip = instruction_pointer(regs);
+	unsigned long rip = ftrace_regs_instruction_pointer(regs);
 
 	if (use_trace)
 		/*
