@@ -55,6 +55,8 @@ static __always_inline void ftrace_instruction_pointer_set(struct ftrace_regs *f
 	regs_set_return_value(&(fregs)->regs, ret)
 #define ftrace_override_function_with_return(fregs) \
 	override_function_with_return(&(fregs)->regs)
+#define pt_regs_from_ftrace_regs(fregs) \
+	(fregs)->regs
 
 struct ftrace_ops;
 

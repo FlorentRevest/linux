@@ -151,6 +151,8 @@ static __always_inline bool ftrace_regs_has_args(struct ftrace_regs *fregs)
 	regs_set_return_value(ftrace_get_regs(fregs), ret)
 #define ftrace_override_function_with_return(fregs) \
 	override_function_with_return(ftrace_get_regs(fregs))
+#define pt_regs_from_ftrace_regs(fregs) \
+	(fregs)->regs
 #endif
 
 typedef void (*ftrace_func_t)(unsigned long ip, unsigned long parent_ip,

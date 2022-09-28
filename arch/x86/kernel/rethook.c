@@ -9,7 +9,7 @@
 
 #include "kprobes/common.h"
 
-__visible void arch_rethook_trampoline_callback(struct pt_regs *regs);
+__visible void arch_rethook_trampoline_callback(struct ftrace_regs *regs);
 
 #ifndef ANNOTATE_NOENDBR
 #define ANNOTATE_NOENDBR
@@ -64,8 +64,9 @@ NOKPROBE_SYMBOL(arch_rethook_trampoline);
 /*
  * Called from arch_rethook_trampoline
  */
-__used __visible void arch_rethook_trampoline_callback(struct pt_regs *regs)
+__used __visible void arch_rethook_trampoline_callback(struct pt_regs *fregs)
 {
+	struct pt_regs *regs = ftrace_get_regs(fregs);
 	unsigned long *frame_pointer;
 
 	/* fixup registers */
@@ -104,7 +105,7 @@ NOKPROBE_SYMBOL(arch_rethook_trampoline_callback);
 STACK_FRAME_NON_STANDARD_FP(arch_rethook_trampoline);
 
 /* This is called from rethook_trampoline_handler(). */
-void arch_rethook_fixup_return(struct pt_regs *regs,
+void arch_rethook_fixup_return(struct ftrace_regs *regs,
 			       unsigned long correct_ret_addr)
 {
 	unsigned long *frame_pointer = (void *)(regs + 1);
@@ -114,7 +115,13 @@ void arch_rethook_fixup_return(struct pt_regs *regs,
 }
 NOKPROBE_SYMBOL(arch_rethook_fixup_return);
 
-void arch_rethook_prepare(struct rethook_node *rh, struct pt_regs *regs, bool mcount)
+void arch_rethook_prepare(struct rethook_node *rh, struct ftrace_regs *regs, bool mcount)
+{
+	arch_rethook_prepare_regs(rh, &regs->regs, mcount);
+}
+NOKPROBE_SYMBOL(arch_rethook_prepare);
+
+void arch_rethook_prepare_regs(struct rethook_node *rh, struct pt_regs *regs, bool mcount)
 {
 	unsigned long *stack = (unsigned long *)regs->sp;
 
@@ -124,4 +131,4 @@ void arch_rethook_prepare(struct rethook_node *rh, struct pt_regs *regs, bool mc
 	/* Replace the return addr with trampoline addr */
 	stack[0] = (unsigned long) arch_rethook_trampoline;
 }
-NOKPROBE_SYMBOL(arch_rethook_prepare);
+NOKPROBE_SYMBOL(arch_rethook_prepare_regs);

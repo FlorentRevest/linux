@@ -77,6 +77,8 @@ arch_ftrace_get_regs(struct ftrace_regs *fregs)
 	regs_set_return_value(&(fregs)->regs, ret)
 #define ftrace_override_function_with_return(fregs) \
 	override_function_with_return(&(fregs)->regs)
+#define pt_regs_from_ftrace_regs(fregs) \
+	(fregs)->regs
 
 struct ftrace_ops;
 #define ftrace_graph_func ftrace_graph_func

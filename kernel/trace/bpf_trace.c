@@ -2386,14 +2386,21 @@ static u64 bpf_kprobe_multi_entry_ip(struct bpf_run_ctx *ctx)
 
 static int
 kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
-			   unsigned long entry_ip, struct pt_regs *regs)
+			   unsigned long entry_ip, struct ftrace_regs *regs)
 {
 	struct bpf_kprobe_multi_run_ctx run_ctx = {
 		.link = link,
 		.entry_ip = entry_ip,
 	};
 	struct bpf_run_ctx *old_run_ctx;
+	struct pt_regs *ctx = ftrace_get_regs(regs);
+	struct pt_regs stack_copy_of_regs;
 	int err;
+
+	if (!ctx) {
+		stack_copy_of_regs = pt_regs_from_ftrace_regs(regs);
+		ctx = &stack_copy_of_regs;
+	}
 
 	if (unlikely(__this_cpu_inc_return(bpf_prog_active) != 1)) {
 		err = 0;
@@ -2403,7 +2410,7 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 	migrate_disable();
 	rcu_read_lock();
 	old_run_ctx = bpf_set_run_ctx(&run_ctx.run_ctx);
-	err = bpf_prog_run(link->link.prog, regs);
+	err = bpf_prog_run(link->link.prog, ctx);
 	bpf_reset_run_ctx(old_run_ctx);
 	rcu_read_unlock();
 	migrate_enable();
@@ -2415,7 +2422,7 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 
 static void
 kprobe_multi_link_handler(struct fprobe *fp, unsigned long entry_ip,
-			  struct pt_regs *regs)
+			  struct ftrace_regs *regs)
 {
 	struct bpf_kprobe_multi_link *link;
 
