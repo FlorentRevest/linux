@@ -384,9 +384,10 @@ NOKPROBE_SYMBOL(fexit_perf_func);
 #endif	/* CONFIG_PERF_EVENTS */
 
 static int fentry_dispatcher(struct fprobe *fp, unsigned long entry_ip,
-			     unsigned long ret_ip, struct pt_regs *regs,
+			     unsigned long ret_ip, struct ftrace_regs *fregs,
 			     void *entry_data)
 {
+	struct pt_regs *regs = ftrace_get_regs(fregs); // HACK: This does not work on arm64
 	struct trace_fprobe *tf = container_of(fp, struct trace_fprobe, fp);
 	int ret = 0;
 
@@ -401,9 +402,10 @@ static int fentry_dispatcher(struct fprobe *fp, unsigned long entry_ip,
 NOKPROBE_SYMBOL(fentry_dispatcher);
 
 static void fexit_dispatcher(struct fprobe *fp, unsigned long entry_ip,
-			     unsigned long ret_ip, struct pt_regs *regs,
+			     unsigned long ret_ip, struct ftrace_regs *fregs,
 			     void *entry_data)
 {
+	struct pt_regs *regs = ftrace_get_regs(fregs); // HACK: This does not work on arm64
 	struct trace_fprobe *tf = container_of(fp, struct trace_fprobe, fp);
 
 	if (trace_probe_test_flag(&tf->tp, TP_FLAG_TRACE))
