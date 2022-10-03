@@ -119,7 +119,8 @@ saved at function entry and passed to exit handler.
         the instruction pointer of @regs may be different from the @entry_ip
         in the entry_handler. If you need traced instruction pointer, you need
         to use @entry_ip. On the other hand, in the exit_handler, the instruction
-        pointer of @regs is set to the currect return address.
+        pointer of @regs is set to the currect return address. Note that this can
+        be NULL if, for example, ftrace doesn't have regs or args saving support.
 
 @private
         A pointer to a blob of data of size fp->private_size that can be shared
