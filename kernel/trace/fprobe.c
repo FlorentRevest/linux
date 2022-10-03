@@ -131,7 +131,7 @@ static void fprobe_init(struct fprobe *fp)
 		fp->ops.func = fprobe_kprobe_handler;
 	else
 		fp->ops.func = fprobe_handler;
-	fp->ops.flags |= FTRACE_OPS_FL_SAVE_REGS;
+	fp->ops.flags |= FTRACE_OPS_FL_SAVE_REGS_IF_SUPPORTED;
 }
 
 static int fprobe_init_rethook(struct fprobe *fp, int num)
