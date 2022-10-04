@@ -27,6 +27,7 @@ static void fprobe_handler(unsigned long ip, unsigned long parent_ip,
 	struct rethook_node *rh = NULL;
 	struct fprobe *fp;
 	void *private = NULL;
+	bool should_rethook = true;
 	int bit;
 
 	fp = container_of(ops, struct fprobe, ops);
@@ -51,10 +52,14 @@ static void fprobe_handler(unsigned long ip, unsigned long parent_ip,
 	}
 
 	if (fp->entry_handler)
-		fp->entry_handler(fp, ip, fregs, fpr->private);
+		should_rethook = fp->entry_handler(fp, ip, fregs, fpr->private);
 
-	if (rh)
-		rethook_hook(rh, fregs, true);
+	if (rh) {
+		if (should_rethook)
+			rethook_hook(rh, fregs, true);
+		else
+			rethook_recycle(rh);
+	}
 
 out:
 	ftrace_test_recursion_unlock(bit);

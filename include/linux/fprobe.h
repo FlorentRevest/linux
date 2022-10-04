@@ -31,7 +31,7 @@ struct fprobe {
 	struct rethook		*rethook;
 	size_t				private_size;
 
-	void (*entry_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
+	bool (*entry_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
 	void (*exit_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
 };
 

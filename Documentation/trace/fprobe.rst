@@ -95,14 +95,22 @@ returns as same as unregister_ftrace_function().
 The fprobe entry/exit handler
 =============================
 
-The prototype of the entry/exit callback function is as follows:
+The prototype of the entry callback function is as follows:
+
+.. code-block:: c
+
+ bool callback_func(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
+
+The prototype of the exit callback is:
 
 .. code-block:: c
 
  void callback_func(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs, void *private);
 
-Note that both entry and exit callbacks have same ptototype. The @entry_ip is
-saved at function entry and passed to exit handler.
+Note that both entry and exit callbacks have the same arguments but different
+return types. In the entry callback, the return value decides whether the exit
+callback should be attached (true) or not (false). The @entry_ip is saved at
+function entry and passed to exit handler.
 
 @fp
         This is the address of `fprobe` data structure related to this handler.

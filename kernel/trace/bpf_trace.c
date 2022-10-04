@@ -2432,6 +2432,21 @@ kprobe_multi_link_handler(struct fprobe *fp, unsigned long entry_ip,
 	kprobe_multi_link_prog_run(link, entry_ip, regs);
 }
 
+static bool
+kprobe_multi_link_entry_handler(struct fprobe *fp, unsigned long entry_ip,
+				struct ftrace_regs *regs, void *private)
+{
+	kprobe_multi_link_handler(fp, entry_ip, regs, private);
+	return true;
+}
+
+static void
+kprobe_multi_link_exit_handler(struct fprobe *fp, unsigned long entry_ip,
+			       struct ftrace_regs *regs, void *private)
+{
+	kprobe_multi_link_handler(fp, entry_ip, regs, private);
+}
+
 static int symbols_cmp_r(const void *a, const void *b, const void *priv)
 {
 	const char **str_a = (const char **) a;
@@ -2553,9 +2568,9 @@ int bpf_kprobe_multi_link_attach(const union bpf_attr *attr, struct bpf_prog *pr
 		goto error;
 
 	if (flags & BPF_F_KPROBE_MULTI_RETURN)
-		link->fp.exit_handler = kprobe_multi_link_handler;
+		link->fp.exit_handler = kprobe_multi_link_exit_handler;
 	else
-		link->fp.entry_handler = kprobe_multi_link_handler;
+		link->fp.entry_handler = kprobe_multi_link_entry_handler;
 
 	link->addrs = addrs;
 	link->cookies = cookies;
