@@ -2618,7 +2618,7 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 	return err;
 }
 
-static void
+static int
 kprobe_multi_link_handler(struct fprobe *fp, unsigned long fentry_ip,
 			  struct pt_regs *regs, void *data)
 {
@@ -2626,6 +2626,7 @@ kprobe_multi_link_handler(struct fprobe *fp, unsigned long fentry_ip,
 
 	link = container_of(fp, struct bpf_kprobe_multi_link, fp);
 	kprobe_multi_link_prog_run(link, get_entry_ip(fentry_ip), regs);
+	return 0;
 }
 
 static int symbols_cmp_r(const void *a, const void *b, const void *priv)
