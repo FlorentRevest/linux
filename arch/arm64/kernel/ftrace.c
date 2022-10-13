@@ -217,6 +217,13 @@ unsigned long ftrace_call_adjust(unsigned long addr)
 /* TODO: rework this API, place something in a header */
 int aarch64_insn_write_u64(void *addr, u64 val);
 
+static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
+			      const struct ftrace_ops *ops)
+{
+	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
+	return aarch64_insn_write_u64((void *)literal, (unsigned long)ops);
+}
+
 /*
  * The compiler has inserted two NOPs before the regular function prologue.
  * All instrumented functions follow the AAPCS, so x0-x8 and x19-x30 are live,
@@ -242,12 +249,10 @@ int aarch64_insn_write_u64(void *addr, u64 val);
 int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec)
 {
 	unsigned long pc = rec->ip - AARCH64_INSN_SIZE;
-	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
 	u32 old, new;
 	int ret;
 
-	ret = aarch64_insn_write_u64((void *)literal,
-				     (unsigned long)&arm64_default_ftrace_ops);
+	ret = ftrace_rec_set_ops(rec, &arm64_default_ftrace_ops);
 	if (ret)
 		return ret;
 
