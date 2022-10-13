@@ -149,6 +149,8 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 	unsigned long pc = rec->ip;
 	u32 old, new;
 
+	WARN_ON_ONCE(!(rec->flags & FTRACE_FL_REC_OPS));
+
 	if (!ftrace_find_callable_addr(rec, NULL, &addr))
 		return -EINVAL;
 
