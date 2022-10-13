@@ -585,11 +585,11 @@ enum {
 	FTRACE_FL_DISABLED	= (1UL << 25),
 	FTRACE_FL_DIRECT	= (1UL << 24),
 	FTRACE_FL_DIRECT_EN	= (1UL << 23),
-	FTRACE_FL_REC_OPS	= (1UL << 24),
-	FTRACE_FL_REC_OPS_EN	= (1UL << 25),
+	FTRACE_FL_REC_OPS	= (1UL << 22),
+	FTRACE_FL_REC_OPS_EN	= (1UL << 21),
 };
 
-#define FTRACE_REF_MAX_SHIFT	23
+#define FTRACE_REF_MAX_SHIFT	21
 #define FTRACE_REF_MAX		((1UL << FTRACE_REF_MAX_SHIFT) - 1)
 
 #define ftrace_rec_count(rec)	((rec)->flags & FTRACE_REF_MAX)
