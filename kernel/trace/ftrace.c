@@ -1644,6 +1644,31 @@ ftrace_find_tramp_ops_any_other(struct dyn_ftrace *rec, struct ftrace_ops *op_ex
 static struct ftrace_ops *
 ftrace_find_tramp_ops_next(struct dyn_ftrace *rec, struct ftrace_ops *ops);
 
+static void __ftrace_rec_update_call_flags(struct dyn_ftrace *rec,
+					   struct ftrace_ops *ops,
+					   bool single_callee)
+{
+	if (single_callee) {
+		/*
+		 * If there's only a single callback registered to a function,
+		 * we can try to invoke it more directly.
+		 */
+		if (ops->trampoline) {
+			rec->flags |= FTRACE_FL_TRAMP;
+		} else if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_REC_OPS)) {
+			rec->flags |= FTRACE_FL_REC_OPS;
+		}
+	} else {
+		/*
+		 * If there are multiple callbacks associated with this
+		 * function, and the previous had a custom trampoline in use,
+		 * then we need to go back to the default trampoline and ops.
+		 */
+		rec->flags &= ~FTRACE_FL_TRAMP;
+		rec->flags &= ~FTRACE_FL_REC_OPS;
+	}
+}
+
 static bool __ftrace_hash_rec_update(struct ftrace_ops *ops,
 				     int filter_hash,
 				     bool inc)
@@ -1734,21 +1759,10 @@ static bool __ftrace_hash_rec_update(struct ftrace_ops *ops,
 			if (ops->flags & FTRACE_OPS_FL_DIRECT)
 				rec->flags |= FTRACE_FL_DIRECT;
 
-			/*
-			 * If there's only a single callback registered to a
-			 * function, and the ops has a trampoline registered
-			 * for it, then we can call it directly.
-			 */
-			if (ftrace_rec_count(rec) == 1 && ops->trampoline)
-				rec->flags |= FTRACE_FL_TRAMP;
+			if (ftrace_rec_count(rec) == 1)
+				__ftrace_rec_update_call_flags(rec, ops, true);
 			else
-				/*
-				 * If we are adding another function callback
-				 * to this function, and the previous had a
-				 * custom trampoline in use, then we need to go
-				 * back to the default trampoline.
-				 */
-				rec->flags &= ~FTRACE_FL_TRAMP;
+				__ftrace_rec_update_call_flags(rec, ops, false);
 
 			/*
 			 * If any ops wants regs saved for this function
@@ -1792,9 +1806,9 @@ static bool __ftrace_hash_rec_update(struct ftrace_ops *ops,
 			 */
 			if (ftrace_rec_count(rec) == 1 &&
 			    ftrace_find_tramp_ops_any_other(rec, ops))
-				rec->flags |= FTRACE_FL_TRAMP;
+				__ftrace_rec_update_call_flags(rec, ops, true);
 			else
-				rec->flags &= ~FTRACE_FL_TRAMP;
+				__ftrace_rec_update_call_flags(rec, ops, false);
 
 			/*
 			 * flags will be cleared in ftrace_check_record()
@@ -2098,8 +2112,9 @@ void ftrace_bug(int failed, struct dyn_ftrace *rec)
 		struct ftrace_ops *ops = NULL;
 
 		pr_info("ftrace record flags: %lx\n", rec->flags);
-		pr_cont(" (%ld)%s", ftrace_rec_count(rec),
-			rec->flags & FTRACE_FL_REGS ? " R" : "  ");
+		pr_cont(" (%ld) %c%c", ftrace_rec_count(rec),
+			rec->flags & FTRACE_FL_REGS ? 'R' : ' ',
+			rec->flags & FTRACE_FL_REC_OPS ? 'O' : ' ');
 		if (rec->flags & FTRACE_FL_TRAMP_EN) {
 			ops = ftrace_find_tramp_ops_any(rec);
 			if (ops) {
@@ -2158,6 +2173,10 @@ static int ftrace_check_record(struct dyn_ftrace *rec, bool enable, bool update)
 		    !(rec->flags & FTRACE_FL_TRAMP_EN))
 			flag |= FTRACE_FL_TRAMP;
 
+		if (!(rec->flags & FTRACE_FL_REC_OPS) !=
+		    !(rec->flags & FTRACE_FL_REC_OPS_EN))
+			flag |= FTRACE_FL_REC_OPS;
+
 		/*
 		 * Direct calls are special, as count matters.
 		 * We must test the record for direct, if the
@@ -2167,6 +2186,8 @@ static int ftrace_check_record(struct dyn_ftrace *rec, bool enable, bool update)
 		 * want the direct enabled (it will be done via the
 		 * direct helper). But if DIRECT_EN is set, and
 		 * the count is not one, we need to clear it.
+		 *
+		 * TODO: does anything need to be done for REC_OPS here?
 		 */
 		if (ftrace_rec_count(rec) == 1) {
 			if (!(rec->flags & FTRACE_FL_DIRECT) !=
@@ -2198,6 +2219,12 @@ static int ftrace_check_record(struct dyn_ftrace *rec, bool enable, bool update)
 					rec->flags |= FTRACE_FL_TRAMP_EN;
 				else
 					rec->flags &= ~FTRACE_FL_TRAMP_EN;
+			}
+			if (flag & FTRACE_FL_REC_OPS) {
+				if (rec->flags & FTRACE_FL_REC_OPS)
+					rec->flags |= FTRACE_FL_REC_OPS_EN;
+				else
+					rec->flags &= ~FTRACE_FL_REC_OPS_EN;
 			}
 
 			if (flag & FTRACE_FL_DIRECT) {
@@ -2248,7 +2275,8 @@ static int ftrace_check_record(struct dyn_ftrace *rec, bool enable, bool update)
 			 * and REGS states. The _EN flags must be disabled though.
 			 */
 			rec->flags &= ~(FTRACE_FL_ENABLED | FTRACE_FL_TRAMP_EN |
-					FTRACE_FL_REGS_EN | FTRACE_FL_DIRECT_EN);
+					FTRACE_FL_REGS_EN | FTRACE_FL_DIRECT_EN |
+					FTRACE_FL_REC_OPS_EN);
 	}
 
 	ftrace_bug_type = FTRACE_BUG_NOP;

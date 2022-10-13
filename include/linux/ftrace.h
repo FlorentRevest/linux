@@ -566,6 +566,8 @@ bool is_ftrace_trampoline(unsigned long addr);
  *  IPMODIFY - the record allows for the IP address to be changed.
  *  DISABLED - the record is not ready to be touched yet
  *  DIRECT   - there is a direct function to call
+ *  REC_OPS - the record wants to call ops directly
+ *  REC_OPS_EN - the function is set up to call ops directly
  *
  * When a new ftrace_ops is registered and wants a function to save
  * pt_regs, the rec->flags REGS is set. When the function has been
@@ -583,6 +585,8 @@ enum {
 	FTRACE_FL_DISABLED	= (1UL << 25),
 	FTRACE_FL_DIRECT	= (1UL << 24),
 	FTRACE_FL_DIRECT_EN	= (1UL << 23),
+	FTRACE_FL_REC_OPS	= (1UL << 24),
+	FTRACE_FL_REC_OPS_EN	= (1UL << 25),
 };
 
 #define FTRACE_REF_MAX_SHIFT	23
