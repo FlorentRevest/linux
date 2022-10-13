@@ -20,9 +20,27 @@
 /*
  * HACK HACK HACK HEAC HACK HRAAK HAAK HACK HRACK HRACK HRACK HACK
  */
-static const struct ftrace_ops arm64_default_ftrace_ops = {
+static struct ftrace_ops arm64_default_ftrace_ops __read_mostly = {
 	.func = arch_ftrace_ops_list_func,
 };
+
+struct ftrace_ops *
+ftrace_find_ops_any(struct dyn_ftrace *rec);
+
+static struct ftrace_ops *arm64_get_rec_ops(struct dyn_ftrace *rec)
+{
+	struct ftrace_ops *ops;
+
+	if (rec->flags & FTRACE_FL_REC_OPS) {
+		ops = ftrace_find_ops_any(rec);
+	} else {
+		ops = &arm64_default_ftrace_ops;
+	}
+
+	WARN_ON(!ops);
+
+	return ops;
+}
 
 #ifdef CONFIG_DYNAMIC_FTRACE
 /*
@@ -141,13 +159,27 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
 	return true;
 }
 
+/* TODO: rework this API, place something in a header */
+int aarch64_insn_write_u64(void *addr, u64 val);
+
+static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
+			      const struct ftrace_ops *ops)
+{
+	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
+	return aarch64_insn_write_u64((void *)literal, (unsigned long)ops);
+}
+
 /*
  * Turn on the call to ftrace_caller() in instrumented function
  */
 int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 {
 	unsigned long pc = rec->ip;
+	struct ftrace_ops *ops;
 	u32 old, new;
+
+	ops = arm64_get_rec_ops(rec);
+	ftrace_rec_set_ops(rec, ops);
 
 	WARN_ON_ONCE(!(rec->flags & FTRACE_FL_REC_OPS));
 
@@ -216,16 +248,6 @@ unsigned long ftrace_call_adjust(unsigned long addr)
 	return addr;
 }
 
-/* TODO: rework this API, place something in a header */
-int aarch64_insn_write_u64(void *addr, u64 val);
-
-static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
-			      const struct ftrace_ops *ops)
-{
-	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
-	return aarch64_insn_write_u64((void *)literal, (unsigned long)ops);
-}
-
 /*
  * The compiler has inserted two NOPs before the regular function prologue.
  * All instrumented functions follow the AAPCS, so x0-x8 and x19-x30 are live,
@@ -274,12 +296,32 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 {
 	unsigned long pc = rec->ip;
 	u32 old = 0, new;
+	int ret;
+
+	new = aarch64_insn_gen_nop();
+
+	ret = ftrace_rec_set_ops(rec, &arm64_default_ftrace_ops);
+	if (ret)
+		return ret;
+
+	/*
+	 * When using mcount, callsites in modules may have been initalized to
+	 * call an arbitrary module PLT (which redirects to the _mcount stub)
+	 * rather than the ftrace PLT we'll use at runtime (which redirects to
+	 * the ftrace trampoline). We can ignore the old PLT when initializing
+	 * the callsite.
+	 *
+	 * Note: 'mod' is only set at module load time.
+	 */
+	if (!IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_REGS) &&
+	    IS_ENABLED(CONFIG_ARM64_MODULE_PLTS) && mod) {
+		return aarch64_insn_patch_text_nosync((void *)pc, new);
+	}
 
 	if (!ftrace_find_callable_addr(rec, mod, &addr))
 		return -EINVAL;
 
 	old = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
-	new = aarch64_insn_gen_nop();
 
 	return ftrace_modify_code(pc, old, new, true);
 }

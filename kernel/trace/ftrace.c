@@ -1637,7 +1637,7 @@ static bool test_rec_ops_needs_regs(struct dyn_ftrace *rec)
 	return  keep_regs;
 }
 
-static struct ftrace_ops *
+struct ftrace_ops *
 ftrace_find_tramp_ops_any(struct dyn_ftrace *rec);
 static struct ftrace_ops *
 ftrace_find_tramp_ops_any_other(struct dyn_ftrace *rec, struct ftrace_ops *op_exclude);
@@ -2310,7 +2310,21 @@ int ftrace_test_record(struct dyn_ftrace *rec, bool enable)
 	return ftrace_check_record(rec, enable, false);
 }
 
-static struct ftrace_ops *
+struct ftrace_ops *
+ftrace_find_ops_any(struct dyn_ftrace *rec)
+{
+	struct ftrace_ops *op;
+	unsigned long ip = rec->ip;
+
+	do_for_each_ftrace_op(op, ftrace_ops_list) {
+
+		if (hash_contains_ip(ip, op->func_hash))
+			return op;
+	} while_for_each_ftrace_op(op);
+
+	return NULL;
+}
+struct ftrace_ops *
 ftrace_find_tramp_ops_any(struct dyn_ftrace *rec)
 {
 	struct ftrace_ops *op;
