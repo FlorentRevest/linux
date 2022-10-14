@@ -2130,14 +2130,6 @@ static void kretprobe_rethook_handler(struct rethook_node *rh, void *data,
 	struct kretprobe_instance *ri;
 	struct kprobe_ctlblk *kcb;
 	struct pt_regs *regs = ftrace_get_regs(fregs);
-	struct pt_regs stack_copy_of_regs;
-
-	if (!regs) {
-		stack_copy_of_regs = pt_regs_from_ftrace_regs(fregs);
-		regs = &stack_copy_of_regs;
-		// TODO: After the callback is called, also copy back
-		// stack_copy_of_regs into fregs
-	}
 
 	/* The data must NOT be null. This means rethook data structure is broken. */
 	if (WARN_ON_ONCE(!data) || !rp->handler)

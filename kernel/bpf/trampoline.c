@@ -155,13 +155,13 @@ static void bpf_fprobe_exit(struct fprobe *fp, unsigned long ip, struct ftrace_r
 	struct bpf_tramp_links *fexit = &links[BPF_TRAMP_FEXIT];
 	int i;
 
-	call_ctx->args[fprobe_ctx->nr_args] = ftrace_regs_return_value(regs);
+	call_ctx->args[fprobe_ctx->nr_args] = ftrace_regs_get_return_value(regs);
 
 	for (i = 0; i < fexit->nr_links; i++)
 		call_bpf_prog(fexit->links[i], &call_ctx->ctx, call_ctx->args);
 }
 
-static bool bpf_fprobe_entry(struct fprobe *fp, unsigned long ip, struct ftrace_regs *regs, void *private)
+static int bpf_fprobe_entry(struct fprobe *fp, unsigned long ip, struct ftrace_regs *regs, void *private)
 {
 	struct bpf_fprobe_call_context *call_ctx = private;
 	struct bpf_fprobe_context *fprobe_ctx = fp->ops.private;
@@ -251,7 +251,7 @@ static struct bpf_trampoline *bpf_trampoline_lookup(u64 key)
 	tr->fops->private = tr;
 	tr->fops->ops_func = bpf_tramp_ftrace_ops_func;
 #else
-	tr->probe.private_size = sizeof(struct bpf_fprobe_call_context);
+	tr->probe.entry_data_size = sizeof(struct bpf_fprobe_call_context);
 	tr->probe.entry_handler = &bpf_fprobe_entry;
 	tr->probe.exit_handler = &bpf_fprobe_exit;
 #endif

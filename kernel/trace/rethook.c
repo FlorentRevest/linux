@@ -290,7 +290,7 @@ unsigned long rethook_trampoline_handler(struct ftrace_regs *regs,
 		BUG_ON(1);
 	}
 
-	ftrace_instruction_pointer_set(regs, correct_ret_addr);
+	ftrace_regs_set_instruction_pointer(regs, correct_ret_addr);
 
 	/*
 	 * These loops must be protected from rethook_free_rcu() because those

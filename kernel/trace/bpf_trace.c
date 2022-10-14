@@ -2599,15 +2599,7 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 	};
 	struct bpf_run_ctx *old_run_ctx;
 	struct pt_regs *ctx = ftrace_get_regs(regs);
-	struct pt_regs stack_copy_of_regs;
 	int err;
-
-	if (!ctx) {
-		stack_copy_of_regs = pt_regs_from_ftrace_regs(regs);
-		ctx = &stack_copy_of_regs;
-		// TODO: After the callback is called, also copy back
-		// stack_copy_of_regs into fregs
-	}
 
 	if (unlikely(__this_cpu_inc_return(bpf_prog_active) != 1)) {
 		err = 0;
@@ -2627,7 +2619,7 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 	return err;
 }
 
-static int
+static void
 kprobe_multi_link_handler(struct fprobe *fp, unsigned long fentry_ip,
 			  struct ftrace_regs *regs, void *data)
 {
@@ -2635,7 +2627,21 @@ kprobe_multi_link_handler(struct fprobe *fp, unsigned long fentry_ip,
 
 	link = container_of(fp, struct bpf_kprobe_multi_link, fp);
 	kprobe_multi_link_prog_run(link, get_entry_ip(fentry_ip), regs);
+}
+
+static int
+kprobe_multi_link_entry_handler(struct fprobe *fp, unsigned long fentry_ip,
+			  struct ftrace_regs *regs, void *data)
+{
+	kprobe_multi_link_handler(fp, fentry_ip, regs, data);
 	return 0;
+}
+
+static void
+kprobe_multi_link_exit_handler(struct fprobe *fp, unsigned long fentry_ip,
+			  struct ftrace_regs *regs, void *data)
+{
+	kprobe_multi_link_handler(fp, fentry_ip, regs, data);
 }
 
 static int symbols_cmp_r(const void *a, const void *b, const void *priv)
@@ -2759,9 +2765,9 @@ int bpf_kprobe_multi_link_attach(const union bpf_attr *attr, struct bpf_prog *pr
 		goto error;
 
 	if (flags & BPF_F_KPROBE_MULTI_RETURN)
-		link->fp.exit_handler = kprobe_multi_link_handler;
+		link->fp.exit_handler = kprobe_multi_link_exit_handler;
 	else
-		link->fp.entry_handler = kprobe_multi_link_handler;
+		link->fp.entry_handler = kprobe_multi_link_entry_handler;
 
 	link->addrs = addrs;
 	link->cookies = cookies;
