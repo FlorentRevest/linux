@@ -56,6 +56,8 @@ void arch_ftrace_ops_list_func(unsigned long ip, unsigned long parent_ip);
 void arch_ftrace_ops_list_func(unsigned long ip, unsigned long parent_ip,
 			       struct ftrace_ops *op, struct ftrace_regs *fregs);
 #endif
+extern const struct ftrace_ops ftrace_list_ops;
+struct ftrace_ops *ftrace_find_unique_ops(struct dyn_ftrace *rec);
 #endif /* CONFIG_FUNCTION_TRACER */
 
 /* Main tracing buffer and events set up */
@@ -564,6 +566,8 @@ bool is_ftrace_trampoline(unsigned long addr);
  *  IPMODIFY - the record allows for the IP address to be changed.
  *  DISABLED - the record is not ready to be touched yet
  *  DIRECT   - there is a direct function to call
+ *  CALL_OPS - the record can use callsite-specific ops
+ *  CALL_OPS_EN - the function is set up to use callsite-specific ops
  *
  * When a new ftrace_ops is registered and wants a function to save
  * pt_regs, the rec->flags REGS is set. When the function has been
@@ -581,9 +585,11 @@ enum {
 	FTRACE_FL_DISABLED	= (1UL << 25),
 	FTRACE_FL_DIRECT	= (1UL << 24),
 	FTRACE_FL_DIRECT_EN	= (1UL << 23),
+	FTRACE_FL_CALL_OPS	= (1UL << 22),
+	FTRACE_FL_CALL_OPS_EN	= (1UL << 21),
 };
 
-#define FTRACE_REF_MAX_SHIFT	23
+#define FTRACE_REF_MAX_SHIFT	21
 #define FTRACE_REF_MAX		((1UL << FTRACE_REF_MAX_SHIFT) - 1)
 
 #define ftrace_rec_count(rec)	((rec)->flags & FTRACE_REF_MAX)
@@ -821,12 +827,15 @@ static inline int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec)
  */
 extern int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr);
 
-#ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
+#if defined(CONFIG_DYNAMIC_FTRACE_WITH_REGS) || \
+	defined(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)
 /**
  * ftrace_modify_call - convert from one addr to another (no nop)
  * @rec: the call site record (e.g. mcount/fentry)
  * @old_addr: the address expected to be currently called to
  * @addr: the address to change to
+ *
+ * TODO: update wording for CALL_OPS
  *
  * This is a very sensitive operation and great care needs
  * to be taken by the arch.  The operation should carefully
