@@ -34,6 +34,17 @@
 #define __aligned_largest               __attribute__((__aligned__))
 
 /*
+ * Contemporary versions of GCC (e.g. 12.2.0) don't always respect
+ * '-falign-functions=N', and require alignment to be specificed via a function
+ * attribute in some cases.
+ */
+#if CONFIG_FUNCTION_ALIGNMENT > 0
+#define __function_aligned		__aligned(CONFIG_FUNCTION_ALIGNMENT)
+#else
+#define __function_aligned
+#endif
+
+/*
  * Note: do not use this directly. Instead, use __alloc_size() since it is conditionally
  * available and includes other attributes. For GCC < 9.1, __alloc_size__ gets undefined
  * in compiler-gcc.h, due to misbehaviors.
@@ -78,8 +89,15 @@
 /*
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-cold-function-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Label-Attributes.html#index-cold-label-attribute
+ *
+ * GCC drops function alignment when the __cold__ attribute is used. Avoid the
+ * __cold__ attribute if function alignment is required.
  */
+#if !defined(CONFIG_CC_IS_GCC) || (CONFIG_FUNCTION_ALIGNMENT == 0)
 #define __cold                          __attribute__((__cold__))
+#else
+#define __cold
+#endif
 
 /*
  * Note the long name.
@@ -369,8 +387,11 @@
 /*
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-weak-function-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Variable-Attributes.html#index-weak-variable-attribute
+ *
+ * GCC drops function alignment when the __weak__ attribute is used. This can
+ * be restored with function attributes.
  */
-#define __weak                          __attribute__((__weak__))
+#define __weak                          __attribute__((__weak__)) __function_aligned
 
 /*
  * Used by functions that use '__builtin_return_address'. These function
