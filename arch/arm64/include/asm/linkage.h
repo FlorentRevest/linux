@@ -5,8 +5,14 @@
 #include <asm/assembler.h>
 #endif
 
-#define __ALIGN		.align 2
-#define __ALIGN_STR	".align 2"
+#if CONFIG_FUNCTION_ALIGNMENT > 0
+#define ARM64_FUNCTION_ALIGNMENT	CONFIG_FUNCTION_ALIGNMENT
+#else
+#define ARM64_FUNCTION_ALIGNMENT	4
+#endif
+
+#define __ALIGN		.balign ARM64_FUNCTION_ALIGNMENT
+#define __ALIGN_STR	".balign " #ARM64_FUNCTION_ALIGNMENT
 
 /*
  * When using in-kernel BTI we need to ensure that PCS-conformant
