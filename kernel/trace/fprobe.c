@@ -303,6 +303,14 @@ int register_fprobe_syms(struct fprobe *fp, const char **syms, int num)
 }
 EXPORT_SYMBOL_GPL(register_fprobe_syms);
 
+bool fprobe_is_registered(struct fprobe *fp)
+{
+	if (!fp || (fp->ops.saved_func != fprobe_handler &&
+		    fp->ops.saved_func != fprobe_kprobe_handler))
+		return false;
+	return true;
+}
+
 /**
  * unregister_fprobe() - Unregister fprobe from ftrace
  * @fp: A fprobe data structure to be unregistered.
@@ -315,7 +323,7 @@ int unregister_fprobe(struct fprobe *fp)
 {
 	int ret;
 
-	if (!fp || fp->ops.func != fprobe_handler)
+	if (!fprobe_is_registered(fp))
 		return -EINVAL;
 
 	/*
