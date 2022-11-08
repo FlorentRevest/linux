@@ -20,13 +20,15 @@ struct fprobe_rethook_node {
 	char data[];
 };
 
+char fprobe_buffer[256]; // This is only for performance measurements!
+
 static void fprobe_handler(unsigned long ip, unsigned long parent_ip,
 			   struct ftrace_ops *ops, struct ftrace_regs *fregs)
 {
 	struct fprobe_rethook_node *fpr;
 	struct rethook_node *rh = NULL;
 	struct fprobe *fp;
-	void *entry_data = NULL;
+	void *entry_data = fprobe_buffer;
 	int bit, ret;
 
 	fp = container_of(ops, struct fprobe, ops);
@@ -39,7 +41,7 @@ static void fprobe_handler(unsigned long ip, unsigned long parent_ip,
 		return;
 	}
 
-	if (fp->exit_handler) {
+/*	if (fp->exit_handler) {
 		rh = rethook_try_get(fp->rethook);
 		if (!rh) {
 			fp->nmissed++;
@@ -49,19 +51,19 @@ static void fprobe_handler(unsigned long ip, unsigned long parent_ip,
 		fpr->entry_ip = ip;
 		if (fp->entry_data_size)
 			entry_data = fpr->data;
-	}
+	} */
 
 	if (fp->entry_handler)
 		ret = fp->entry_handler(fp, ip, parent_ip, fregs, entry_data);
 
 	/* If entry_handler returns !0, nmissed is not counted. */
-	if (rh) {
+/*	if (rh) {
 		if (ret)
 			rethook_recycle(rh);
 		else
 			rethook_hook(rh, fregs, true);
 	}
-out:
+out: */
 	ftrace_test_recursion_unlock(bit);
 }
 NOKPROBE_SYMBOL(fprobe_handler);
