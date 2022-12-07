@@ -93,6 +93,7 @@ int main(void)
   DEFINE(FREGS_LR,		offsetof(struct ftrace_regs, lr));
   DEFINE(FREGS_SP,		offsetof(struct ftrace_regs, sp));
   DEFINE(FREGS_PC,		offsetof(struct ftrace_regs, pc));
+  DEFINE(FREGS_CUSTOM_TRAMP,	offsetof(struct ftrace_regs, custom_tramp));
   DEFINE(FREGS_SIZE,		sizeof(struct ftrace_regs));
   BLANK();
 #endif
@@ -197,6 +198,7 @@ int main(void)
 #endif
 #ifdef CONFIG_FUNCTION_TRACER
   DEFINE(DYN_FTRACE_OPS,		offsetof(struct dyn_ftrace, arch.ops));
+  DEFINE(DYN_FTRACE_TRAMPOLINE,		offsetof(struct dyn_ftrace, arch.trampoline));
   DEFINE(FTRACE_OPS_FUNC,		offsetof(struct ftrace_ops, func));
 #endif
   return 0;
