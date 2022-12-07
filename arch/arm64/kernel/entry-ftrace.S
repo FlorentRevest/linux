@@ -36,8 +36,17 @@
 SYM_CODE_START(ftrace_caller)
 	bti	c
 
+	/* Retrieve the ops (stored as a literal in the patchsite).  */
+	bic	x11, x30, 0x7
+	ldr	x11, [x11, #-(4 * AARCH64_INSN_SIZE)]
+	/* Find out if it has a direct call address registered */
+	ldr	x12, [x11, #FTRACE_OPS_DIRECT_CALL]
+
+	cbz	x12, 1f
+	ret	x12
+
 	/* Save original SP */
-	mov	x10, sp
+1:	mov	x10, sp
 
 	/* Make room for ftrace regs, plus two frame records */
 	sub	sp, sp, #(FREGS_SIZE + 32)
@@ -57,6 +66,9 @@ SYM_CODE_START(ftrace_caller)
 	/* Save the PC after the ftrace callsite */
 	str	x30, [sp, #FREGS_PC]
 
+	/* Set custom_tramp to zero  */
+	str	xzr, [sp, #FREGS_CUSTOM_TRAMP]
+
 	/* Create a frame record for the callsite above the ftrace regs */
 	stp	x29, x9, [sp, #FREGS_SIZE + 16]
 	add	x29, sp, #FREGS_SIZE + 16
@@ -68,15 +80,9 @@ SYM_CODE_START(ftrace_caller)
 	sub	x0, x30, #AARCH64_INSN_SIZE		// ip (callsite's BL insn)
 	mov	x1, x9					// parent_ip (callsite's LR)
 
-	/*
-	 * See ftrace_call_adjust()
-	 */
-	bic	x2, x30, 0x7
-	ldr	x2, [x2, #-(4 * AARCH64_INSN_SIZE)]	// op
-
 	mov	x3, sp					// regs
 
-	ldr	x4, [x2, #FTRACE_OPS_FUNC]		// op->func
+	ldr	x4, [x11, #FTRACE_OPS_FUNC]		// op->func
 	blr	x4					// op->func(ip, parent_ip, op, regs)
 
 /*
@@ -94,12 +100,21 @@ SYM_CODE_START(ftrace_caller)
 	/* Restore the callsite's FP, LR, PC */
 	ldr	x29, [sp, #FREGS_FP]
 	ldr	x30, [sp, #FREGS_LR]
-	ldr	x9,  [sp, #FREGS_PC]
+	ldr	x10, [sp, #FREGS_PC]
 
+	ldr	x11, [sp, #FREGS_CUSTOM_TRAMP]
+	cbz	x11, 1f
+	/* Set x9 to parent ip before jump to custom trampoline */
+	mov	x9,  x30
+	/* Set lr to self ip */
+	ldr	x30, [sp, #FREGS_PC]
+	/* Set x10 (used for return address) to custom trampoline */
+	mov	x10, x11
+1:
 	/* Restore the callsite's SP */
 	add	sp, sp, #FREGS_SIZE + 32
 
-	ret	x9
+	ret	x10
 SYM_CODE_END(ftrace_caller)
 
 #else /* CONFIG_DYNAMIC_FTRACE_WITH_ARGS */
