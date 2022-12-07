@@ -14,6 +14,14 @@
 #include <asm/insn.h>
 
 #ifdef CONFIG_DYNAMIC_FTRACE_WITH_ARGS
+SYM_CODE_START(ftrace_direct_caller)
+	bti	c
+
+	bic	x10, x30, 0x7
+	ldr	x10, [x10, #-(4 * AARCH64_INSN_SIZE)]
+	ret	x10
+SYM_CODE_END(ftrace_direct_caller)
+
 /*
  * Due to -fpatchable-function-entry=2, the compiler has placed two NOPs before
  * the regular function prologue. For an enabled callsite, ftrace_init_nop() and
@@ -57,6 +65,9 @@ SYM_CODE_START(ftrace_caller)
 	/* Save the PC after the ftrace callsite */
 	str	x30, [sp, #FREGS_PC]
 
+	/* Set custom_tramp to zero  */
+	str	xzr, [sp, #FREGS_CUSTOM_TRAMP]
+
 	/* Create a frame record for the callsite above the ftrace regs */
 	stp	x29, x9, [sp, #FREGS_SIZE + 16]
 	add	x29, sp, #FREGS_SIZE + 16
@@ -94,12 +105,21 @@ SYM_CODE_START(ftrace_caller)
 	/* Restore the callsite's FP, LR, PC */
 	ldr	x29, [sp, #FREGS_FP]
 	ldr	x30, [sp, #FREGS_LR]
-	ldr	x9,  [sp, #FREGS_PC]
+	ldr	x10, [sp, #FREGS_PC]
 
+	ldr	x11, [sp, #FREGS_CUSTOM_TRAMP]
+	cbz	x11, 1f
+	/* Set x9 to parent ip before jump to custom trampoline */
+	mov	x9,  x30
+	/* Set lr to self ip */
+	ldr	x30, [sp, #FREGS_PC]
+	/* Set x10 (used for return address) to custom trampoline */
+	mov	x10, x11
+1:
 	/* Restore the callsite's SP */
 	add	sp, sp, #FREGS_SIZE + 32
 
-	ret	x9
+	ret	x10
 SYM_CODE_END(ftrace_caller)
 
 #else /* CONFIG_DYNAMIC_FTRACE_WITH_ARGS */

@@ -496,6 +496,7 @@ static int module_init_ftrace_plt(const Elf_Ehdr *hdr,
 	plts = (void *)s->sh_addr;
 
 	__init_plt(&plts[FTRACE_PLT_IDX], FTRACE_ADDR);
+	__init_plt(&plts[FTRACE_DIRECT_PLT_IDX], FTRACE_DIRECT_ADDR);
 
 	mod->arch.ftrace_trampolines = plts;
 #endif

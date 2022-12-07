@@ -33,7 +33,8 @@
 #define MCOUNT_INSN_SIZE	AARCH64_INSN_SIZE
 
 #define FTRACE_PLT_IDX		0
-#define NR_FTRACE_PLTS		1
+#define FTRACE_DIRECT_PLT_IDX	1
+#define NR_FTRACE_PLTS		2
 
 /*
  * Currently, gcc tends to save the link register after the local variables
@@ -60,6 +61,9 @@ struct dyn_arch_ftrace {
 
 extern unsigned long ftrace_graph_call;
 
+extern void ftrace_direct_caller(void);
+#define FTRACE_DIRECT_ADDR (unsigned long)ftrace_direct_caller
+
 extern void return_to_handler(void);
 
 unsigned long ftrace_call_adjust(unsigned long addr);
@@ -80,6 +84,8 @@ struct ftrace_regs {
 
 	unsigned long sp;
 	unsigned long pc;
+
+	unsigned long custom_tramp;
 };
 
 static __always_inline unsigned long
@@ -136,6 +142,19 @@ int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec);
 void ftrace_graph_func(unsigned long ip, unsigned long parent_ip,
 		       struct ftrace_ops *op, struct ftrace_regs *fregs);
 #define ftrace_graph_func ftrace_graph_func
+
+#ifdef CONFIG_HAVE_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
+static inline void arch_ftrace_set_direct_caller(struct ftrace_regs *fregs,
+						 unsigned long addr)
+{
+	/*
+	 * Place custom trampoline address in fregs->custom_tramp to let the
+	 * ftrace trampoline jump to it.
+	 */
+	fregs->custom_tramp = addr;
+}
+#endif /* CONFIG_HAVE_DYNAMIC_FTRACE_WITH_DIRECT_CALLS */
+
 #endif
 
 #define ftrace_return_address(n) return_address(n)

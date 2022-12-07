@@ -132,8 +132,17 @@ static struct plt_entry *get_ftrace_plt(struct module *mod, unsigned long addr)
 
 	if (addr == FTRACE_ADDR)
 		return &plt[FTRACE_PLT_IDX];
+	if (addr == FTRACE_DIRECT_ADDR)
+		return &plt[FTRACE_DIRECT_PLT_IDX];
 #endif
 	return NULL;
+}
+
+static bool in_bl_range(unsigned long addr, unsigned long pc)
+{
+	long offset = (long)addr - (long)pc;
+
+	return offset >= -SZ_128M && offset < SZ_128M;
 }
 
 /*
@@ -147,18 +156,37 @@ static struct plt_entry *get_ftrace_plt(struct module *mod, unsigned long addr)
  */
 static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
 				      struct module *mod,
-				      unsigned long *addr)
+				      unsigned long *addr,
+				      unsigned long *literal)
 {
 	unsigned long pc = rec->ip;
-	long offset = (long)*addr - (long)pc;
 	struct plt_entry *plt;
+
+	if (*addr == FTRACE_ADDR &&
+	    IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS))
+		*literal = (unsigned long)arm64_rec_get_ops(rec);
+	else
+		*literal = 0;
 
 	/*
 	 * When the target is within range of the 'BL' instruction, use 'addr'
 	 * as-is and branch to that directly.
 	 */
-	if (offset >= -SZ_128M && offset < SZ_128M)
+	if (in_bl_range(*addr, pc))
 		return true;
+
+	if (*addr != FTRACE_ADDR) {
+		/*
+		 * If direct-calling something (not the ftrace trampoline), that
+		 * is out of reach, use the direct call trampoline as an
+		 * intermediary step.
+		 */
+		*literal = *addr;
+		*addr = FTRACE_DIRECT_ADDR;
+
+		if (in_bl_range(*addr, pc))
+			return true;
+	}
 
 	/*
 	 * When the target is outside of the range of a 'BL' instruction, we
@@ -196,12 +224,13 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
 	return true;
 }
 
-static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
-			      const struct ftrace_ops *ops)
+static int ftrace_rec_set_literal(const struct dyn_ftrace *rec,
+				  unsigned long literal)
 {
-	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
-	return aarch64_insn_write_literal_u64((void *)literal,
-					      (unsigned long)ops);
+	unsigned long literal_address = ALIGN_DOWN(rec->ip - 12, 8);
+
+	return aarch64_insn_write_literal_u64((void *)literal_address,
+					      (unsigned long)literal);
 }
 
 /*
@@ -210,16 +239,15 @@ static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
 int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 {
 	unsigned long pc = rec->ip;
-	const struct ftrace_ops *ops;
+	unsigned long literal;
 	u32 old, new;
+	int ret;
 
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
-		ops = arm64_rec_get_ops(rec);
-		ftrace_rec_set_ops(rec, ops);
-	}
-
-	if (!ftrace_find_callable_addr(rec, NULL, &addr))
+	if (!ftrace_find_callable_addr(rec, NULL, &addr, &literal))
 		return -EINVAL;
+	ret = ftrace_rec_set_literal(rec, literal);
+	if (ret)
+		return ret;
 
 	old = aarch64_insn_gen_nop();
 	new = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
@@ -231,13 +259,25 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 int ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
 		       unsigned long addr)
 {
-	if (WARN_ON_ONCE(addr != old_addr))
+	unsigned long pc = rec->ip;
+	unsigned long old_literal, literal;
+	u32 old, new;
+	int ret;
+
+	if (!ftrace_find_callable_addr(rec, NULL, &old_addr, &old_literal))
 		return -EINVAL;
 
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS))
-		return ftrace_rec_set_ops(rec, arm64_rec_get_ops(rec));
+	if (!ftrace_find_callable_addr(rec, NULL, &addr, &literal))
+		return -EINVAL;
+	ret = ftrace_rec_set_literal(rec, literal);
+	if (ret)
+		return ret;
 
-	return -EINVAL;
+	old = aarch64_insn_gen_branch_imm(pc, old_addr,
+					  AARCH64_INSN_BRANCH_LINK);
+	new = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
+
+	return ftrace_modify_code(pc, old, new, true);
 }
 
 unsigned long ftrace_call_adjust(unsigned long addr)
@@ -327,11 +367,6 @@ int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec)
 {
 	unsigned long pc = rec->ip - AARCH64_INSN_SIZE;
 	u32 old, new;
-	int ret;
-
-	ret = ftrace_rec_set_ops(rec, &ftrace_list_ops);
-	if (ret)
-		return ret;
 
 	old = aarch64_insn_gen_nop();
 	new = aarch64_insn_gen_move_reg(AARCH64_INSN_REG_9,
@@ -348,16 +383,10 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 		    unsigned long addr)
 {
 	unsigned long pc = rec->ip;
+	unsigned long literal;
 	u32 old = 0, new;
-	int ret;
 
 	new = aarch64_insn_gen_nop();
-
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
-		ret = ftrace_rec_set_ops(rec, &ftrace_list_ops);
-		if (ret)
-			return ret;
-	}
 
 	/*
 	 * When using mcount, callsites in modules may have been initalized to
@@ -373,7 +402,7 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 		return aarch64_insn_patch_text_nosync((void *)pc, new);
 	}
 
-	if (!ftrace_find_callable_addr(rec, mod, &addr))
+	if (!ftrace_find_callable_addr(rec, mod, &addr, &literal))
 		return -EINVAL;
 
 	old = aarch64_insn_gen_branch_imm(pc, addr, AARCH64_INSN_BRANCH_LINK);
