@@ -2570,7 +2570,7 @@ static void call_direct_funcs(unsigned long ip, unsigned long pip,
 
 struct ftrace_ops direct_ops = {
 	.func		= call_direct_funcs,
-	.flags		= FTRACE_OPS_FL_DIRECT | FTRACE_OPS_FL_SAVE_REGS
+	.flags		= FTRACE_OPS_FL_DIRECT
 			  | FTRACE_OPS_FL_PERMANENT,
 	/*
 	 * By declaring the main trampoline as this trampoline
@@ -5656,7 +5656,7 @@ int modify_ftrace_direct(unsigned long ip,
 }
 EXPORT_SYMBOL_GPL(modify_ftrace_direct);
 
-#define MULTI_FLAGS (FTRACE_OPS_FL_DIRECT | FTRACE_OPS_FL_SAVE_REGS)
+#define MULTI_FLAGS (FTRACE_OPS_FL_DIRECT)
 
 static int check_direct_multi(struct ftrace_ops *ops)
 {
