@@ -196,6 +196,7 @@ int main(void)
   BLANK();
 #endif
 #ifdef CONFIG_FUNCTION_TRACER
+  DEFINE(DYN_FTRACE_OPS,		offsetof(struct dyn_ftrace, arch.ops));
   DEFINE(FTRACE_OPS_FUNC,		offsetof(struct ftrace_ops, func));
 #endif
   return 0;

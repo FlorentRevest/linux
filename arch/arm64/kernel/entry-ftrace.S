@@ -72,11 +72,12 @@ SYM_CODE_START(ftrace_caller)
 	 * See ftrace_call_adjust()
 	 */
 	bic	x2, x30, 0x7
-	ldr	x2, [x2, #-(4 * AARCH64_INSN_SIZE)]	// op
+	ldr	x2, [x2, #-(4 * AARCH64_INSN_SIZE)]	// dyn_ftrace
 
 	mov	x3, sp					// regs
 
-	ldr	x4, [x2, #FTRACE_OPS_FUNC]		// op->func
+	ldr	x4, [x2, #DYN_FTRACE_OPS]		// dyn_ftrace->ops
+	ldr	x4, [x4, #FTRACE_OPS_FUNC]		// op->func
 	blr	x4					// op->func(ip, parent_ip, op, regs)
 
 /*

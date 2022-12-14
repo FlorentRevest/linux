@@ -55,7 +55,8 @@ extern void _mcount(unsigned long);
 extern void *return_address(unsigned int);
 
 struct dyn_arch_ftrace {
-	/* No extra data needed for arm64 */
+	/* Pointed to by the patchsite, looked up by ftrace_caller  */
+	const struct ftrace_ops *ops;
 };
 
 extern unsigned long ftrace_graph_call;

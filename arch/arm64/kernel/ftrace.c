@@ -196,27 +196,15 @@ static bool ftrace_find_callable_addr(struct dyn_ftrace *rec,
 	return true;
 }
 
-static int ftrace_rec_set_ops(const struct dyn_ftrace *rec,
-			      const struct ftrace_ops *ops)
-{
-	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
-	return aarch64_insn_write_literal_u64((void *)literal,
-					      (unsigned long)ops);
-}
-
 /*
  * Turn on the call to ftrace_caller() in instrumented function
  */
 int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 {
 	unsigned long pc = rec->ip;
-	const struct ftrace_ops *ops;
 	u32 old, new;
 
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
-		ops = arm64_rec_get_ops(rec);
-		ftrace_rec_set_ops(rec, ops);
-	}
+	rec->arch.ops = arm64_rec_get_ops(rec);
 
 	if (!ftrace_find_callable_addr(rec, NULL, &addr))
 		return -EINVAL;
@@ -234,8 +222,7 @@ int ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
 	if (WARN_ON_ONCE(addr != old_addr))
 		return -EINVAL;
 
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS))
-		return ftrace_rec_set_ops(rec, arm64_rec_get_ops(rec));
+	rec->arch.ops = arm64_rec_get_ops(rec);
 
 	return -EINVAL;
 }
@@ -325,13 +312,17 @@ unsigned long ftrace_call_adjust(unsigned long addr)
  */
 int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec)
 {
+	unsigned long literal = ALIGN_DOWN(rec->ip - 12, 8);
 	unsigned long pc = rec->ip - AARCH64_INSN_SIZE;
 	u32 old, new;
 	int ret;
 
-	ret = ftrace_rec_set_ops(rec, &ftrace_list_ops);
-	if (ret)
-		return ret;
+	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
+		ret =  aarch64_insn_write_literal_u64((void *)literal,
+						      (unsigned long)rec);
+		if (ret)
+			return ret;
+	}
 
 	old = aarch64_insn_gen_nop();
 	new = aarch64_insn_gen_move_reg(AARCH64_INSN_REG_9,
@@ -349,15 +340,10 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 {
 	unsigned long pc = rec->ip;
 	u32 old = 0, new;
-	int ret;
+
+	rec->arch.ops = &ftrace_list_ops;
 
 	new = aarch64_insn_gen_nop();
-
-	if (IS_ENABLED(CONFIG_DYNAMIC_FTRACE_WITH_CALL_OPS)) {
-		ret = ftrace_rec_set_ops(rec, &ftrace_list_ops);
-		if (ret)
-			return ret;
-	}
 
 	/*
 	 * When using mcount, callsites in modules may have been initalized to
