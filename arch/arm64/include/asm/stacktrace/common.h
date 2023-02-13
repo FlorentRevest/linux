@@ -23,7 +23,7 @@ struct stack_info {
  * @fp:          The fp value in the frame record (or the real fp)
  * @pc:          The lr value in the frame record (or the real lr)
  *
- * @kr_cur:      When KRETPROBES is selected, holds the kretprobe instance
+ * @kr_cur:      When RETHOOK is selected, holds the rethook instance
  *               associated with the most recently encountered replacement lr
  *               value.
  *
@@ -36,7 +36,7 @@ struct stack_info {
 struct unwind_state {
 	unsigned long fp;
 	unsigned long pc;
-#ifdef CONFIG_KRETPROBES
+#if defined(CONFIG_RETHOOK)
 	struct llist_node *kr_cur;
 #endif
 	struct task_struct *task;
@@ -70,7 +70,7 @@ static inline void unwind_init_common(struct unwind_state *state,
 				      struct task_struct *task)
 {
 	state->task = task;
-#ifdef CONFIG_KRETPROBES
+#if defined(CONFIG_RETHOOK)
 	state->kr_cur = NULL;
 #endif
 

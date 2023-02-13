@@ -107,9 +107,9 @@ static int notrace unwind_next(struct unwind_state *state)
 		state->pc = orig_pc;
 	}
 #endif /* CONFIG_FUNCTION_GRAPH_TRACER */
-#ifdef CONFIG_KRETPROBES
-	if (is_kretprobe_trampoline(state->pc))
-		state->pc = kretprobe_find_ret_addr(tsk, (void *)state->fp, &state->kr_cur);
+#ifdef CONFIG_RETHOOK
+	if (is_rethook_trampoline(state->pc))
+		state->pc = rethook_find_ret_addr(tsk, state->fp, &state->kr_cur);
 #endif
 
 	return 0;
