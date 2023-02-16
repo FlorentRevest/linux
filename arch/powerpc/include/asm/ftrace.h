@@ -69,6 +69,8 @@ ftrace_regs_get_instruction_pointer(struct ftrace_regs *fregs)
 	override_function_with_return(&(fregs)->regs)
 #define ftrace_regs_query_register_offset(name) \
 	regs_query_register_offset(name)
+#define pt_regs_from_ftrace_regs(fregs) \
+	(fregs)->regs
 
 struct ftrace_ops;
 

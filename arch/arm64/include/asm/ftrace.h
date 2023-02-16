@@ -137,6 +137,26 @@ ftrace_override_function_with_return(struct ftrace_regs *fregs)
 	fregs->pc = fregs->lr;
 }
 
+static __always_inline struct pt_regs
+pt_regs_from_ftrace_regs(struct ftrace_regs *fregs)
+{
+	return (struct pt_regs){
+		.regs = { [0] = fregs->regs[0],
+			  [1] = fregs->regs[1],
+			  [2] = fregs->regs[2],
+			  [3] = fregs->regs[3],
+			  [4] = fregs->regs[4],
+			  [5] = fregs->regs[5],
+			  [6] = fregs->regs[6],
+			  [7] = fregs->regs[7],
+			  [8] = fregs->regs[8],
+			  [29] = fregs->fp,
+			  [30] = fregs->lr },
+		.sp = fregs->sp,
+		.pc = fregs->pc,
+	};
+}
+
 int ftrace_regs_query_register_offset(const char *name);
 
 int ftrace_init_nop(struct module *mod, struct dyn_ftrace *rec);
