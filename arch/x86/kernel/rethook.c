@@ -64,32 +64,32 @@ NOKPROBE_SYMBOL(arch_rethook_trampoline);
 /*
  * Called from arch_rethook_trampoline
  */
-__used __visible void arch_rethook_trampoline_callback(struct pt_regs *regs)
+__used __visible void arch_rethook_trampoline_callback(struct ftrace_regs *fregs)
 {
 	unsigned long *frame_pointer;
 
 	/* fixup registers */
-	regs->cs = __KERNEL_CS;
+	fregs->regs.cs = __KERNEL_CS;
 #ifdef CONFIG_X86_32
-	regs->gs = 0;
+	fregs->regs.gs = 0;
 #endif
-	regs->ip = (unsigned long)&arch_rethook_trampoline;
-	regs->orig_ax = ~0UL;
-	regs->sp += 2*sizeof(long);
-	frame_pointer = (long *)(regs + 1);
+	fregs->regs->ip = (unsigned long)&arch_rethook_trampoline;
+	fregs->regs->orig_ax = ~0UL;
+	fregs->regs->sp += 2*sizeof(long);
+	frame_pointer = (long *)(fregs->regs + 1);
 
 	/*
 	 * The return address at 'frame_pointer' is recovered by the
 	 * arch_rethook_fixup_return() which called from this
 	 * rethook_trampoline_handler().
 	 */
-	rethook_trampoline_handler(regs, (unsigned long)frame_pointer);
+	rethook_trampoline_handler(fregs, (unsigned long)frame_pointer);
 
 	/*
 	 * Copy FLAGS to 'pt_regs::ss' so that arch_rethook_trapmoline()
 	 * can do RET right after POPF.
 	 */
-	*(unsigned long *)&regs->ss = regs->flags;
+	*(unsigned long *)&fregs->regs.ss = fregs->regs.flags;
 }
 NOKPROBE_SYMBOL(arch_rethook_trampoline_callback);
 
@@ -104,10 +104,10 @@ NOKPROBE_SYMBOL(arch_rethook_trampoline_callback);
 STACK_FRAME_NON_STANDARD_FP(arch_rethook_trampoline);
 
 /* This is called from rethook_trampoline_handler(). */
-void arch_rethook_fixup_return(struct pt_regs *regs,
+void arch_rethook_fixup_return(struct ftrace_regs *fregs,
 			       unsigned long correct_ret_addr)
 {
-	unsigned long *frame_pointer = (void *)(regs + 1);
+	unsigned long *frame_pointer = (void *)(fregs + 1);
 
 	/* Replace fake return address with real one. */
 	*frame_pointer = correct_ret_addr;
@@ -125,3 +125,10 @@ void arch_rethook_prepare(struct rethook_node *rh, struct pt_regs *regs, bool mc
 	stack[0] = (unsigned long) arch_rethook_trampoline;
 }
 NOKPROBE_SYMBOL(arch_rethook_prepare);
+
+void arch_rethook_prepare_ftrace_regs(struct rethook_node *rhn,
+				      struct ftrace_regs *fregs, bool mcount)
+{
+	arch_rethook_prepare(rhn, &fregs->regs, mcount);
+}
+NOKPROBE_SYMBOL(arch_rethook_prepare_ftrace_regs);

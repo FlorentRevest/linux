@@ -25,3 +25,11 @@ void arch_rethook_prepare(struct rethook_node *rhn, struct pt_regs *regs, bool m
 }
 
 NOKPROBE_SYMBOL(arch_rethook_prepare);
+
+void arch_rethook_prepare_ftrace_regs(struct rethook_node *rhn,
+				      struct ftrace_regs *fregs, bool mcount)
+{
+	arch_rethook_prepare(rhn, &fregs->regs, mcount);
+}
+
+NOKPROBE_SYMBOL(arch_rethook_prepare_ftrace_regs);

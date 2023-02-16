@@ -30,8 +30,8 @@ struct fprobe {
 	unsigned int		flags;
 	struct rethook		*rethook;
 
-	void (*entry_handler)(struct fprobe *fp, unsigned long entry_ip, struct pt_regs *regs);
-	void (*exit_handler)(struct fprobe *fp, unsigned long entry_ip, struct pt_regs *regs);
+	void (*entry_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs);
+	void (*exit_handler)(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs);
 };
 
 /* This fprobe is soft-disabled. */

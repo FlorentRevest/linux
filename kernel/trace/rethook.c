@@ -193,6 +193,17 @@ void rethook_hook(struct rethook_node *node, struct pt_regs *regs, bool mcount)
 }
 NOKPROBE_SYMBOL(rethook_hook);
 
+/**
+ * rethook_hook_pt_regs() - Variant of rethook_hook with a ftrace_regs argument
+ */
+void rethook_hook_ftrace_regs(struct rethook_node *node,
+			      struct ftrace_regs *fregs, bool mcount)
+{
+	arch_rethook_prepare_ftrace_regs(node, fregs, mcount);
+	__llist_add(&node->llist, &current->rethooks);
+}
+NOKPROBE_SYMBOL(rethook_hook_ftrace_regs);
+
 /* This assumes the 'tsk' is the current task or is not running. */
 static unsigned long __rethook_find_ret_addr(struct task_struct *tsk,
 					     struct llist_node **cur)
@@ -256,7 +267,7 @@ unsigned long rethook_find_ret_addr(struct task_struct *tsk, unsigned long frame
 }
 NOKPROBE_SYMBOL(rethook_find_ret_addr);
 
-void __weak arch_rethook_fixup_return(struct pt_regs *regs,
+void __weak arch_rethook_fixup_return(struct ftrace_regs *regs,
 				      unsigned long correct_ret_addr)
 {
 	/*
@@ -268,7 +279,7 @@ void __weak arch_rethook_fixup_return(struct pt_regs *regs,
 }
 
 /* This function will be called from each arch-defined trampoline. */
-unsigned long rethook_trampoline_handler(struct pt_regs *regs,
+unsigned long rethook_trampoline_handler(struct ftrace_regs *regs,
 					 unsigned long frame)
 {
 	struct llist_node *first, *node = NULL;
@@ -282,7 +293,7 @@ unsigned long rethook_trampoline_handler(struct pt_regs *regs,
 		BUG_ON(1);
 	}
 
-	instruction_pointer_set(regs, correct_ret_addr);
+	ftrace_regs_set_instruction_pointer(regs, correct_ret_addr);
 
 	/*
 	 * These loops must be protected from rethook_free_rcu() because those

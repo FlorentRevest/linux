@@ -91,7 +91,7 @@ The prototype of the entry/exit callback function is as follows:
 
 .. code-block:: c
 
- void callback_func(struct fprobe *fp, unsigned long entry_ip, struct pt_regs *regs);
+ void callback_func(struct fprobe *fp, unsigned long entry_ip, struct ftrace_regs *regs);
 
 Note that both entry and exit callbacks have same ptototype. The @entry_ip is
 saved at function entry and passed to exit handler.
@@ -107,7 +107,7 @@ saved at function entry and passed to exit handler.
         the address where the ftrace is instrumented.
 
 @regs
-        This is the `pt_regs` data structure at the entry and exit. Note that
+        This is the `ftrace_regs` data structure at the entry and exit. Note that
         the instruction pointer of @regs may be different from the @entry_ip
         in the entry_handler. If you need traced instruction pointer, you need
         to use @entry_ip. On the other hand, in the exit_handler, the instruction
