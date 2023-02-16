@@ -1032,7 +1032,7 @@ static const struct bpf_func_proto bpf_get_func_ip_proto_tracing = {
 };
 
 #ifdef CONFIG_X86_KERNEL_IBT
-static unsigned long get_entry_ip(unsigned long fentry_ip)
+static unsigned long get_kprobe_entry_ip(unsigned long fentry_ip)
 {
 	u32 instr;
 
@@ -1044,7 +1044,7 @@ static unsigned long get_entry_ip(unsigned long fentry_ip)
 	return fentry_ip;
 }
 #else
-#define get_entry_ip(fentry_ip) fentry_ip
+#define get_kprobe_entry_ip(fentry_ip) fentry_ip
 #endif
 
 BPF_CALL_1(bpf_get_func_ip_kprobe, struct pt_regs *, regs)
@@ -1054,7 +1054,7 @@ BPF_CALL_1(bpf_get_func_ip_kprobe, struct pt_regs *, regs)
 	if (!kp || !(kp->flags & KPROBE_FLAG_ON_FUNC_ENTRY))
 		return 0;
 
-	return get_entry_ip((uintptr_t)kp->addr);
+	return get_kprobe_entry_ip((uintptr_t)kp->addr);
 }
 
 static const struct bpf_func_proto bpf_get_func_ip_proto_kprobe = {
@@ -2653,6 +2653,28 @@ kprobe_multi_link_prog_run(struct bpf_kprobe_multi_link *link,
 	return err;
 }
 
+#ifdef CONFIG_X86_KERNEL_IBT
+#define get_ftrace_entry_ip(fentry_ip) get_kprobe_entry_ip(fentry_ip)
+#elif IS_ENABLED(CONFIG_ARM64)
+static unsigned long get_ftrace_entry_ip(unsigned long fentry_ip)
+{
+	/*
+	 * fentry_ip is the address of the BL in the ftrace patch site:
+	 *   func: (BTI C             only on BTI-enabled kernels)
+	 *          MOV X9, LR
+	 *          BL  ftrace_caller
+	 */
+	fentry_ip -= AARCH64_INSN_SIZE;
+#if IS_ENABLED(CONFIG_ARM64_BTI_KERNEL)
+	fentry_ip -= AARCH64_INSN_SIZE;
+#endif
+
+	return fentry_ip;
+}
+#else
+#define get_ftrace_entry_ip(fentry_ip) fentry_ip
+#endif
+
 static void
 kprobe_multi_link_handler(struct fprobe *fp, unsigned long fentry_ip,
 			  struct ftrace_regs *fregs)
@@ -2660,7 +2682,7 @@ kprobe_multi_link_handler(struct fprobe *fp, unsigned long fentry_ip,
 	struct bpf_kprobe_multi_link *link;
 
 	link = container_of(fp, struct bpf_kprobe_multi_link, fp);
-	kprobe_multi_link_prog_run(link, get_entry_ip(fentry_ip), fregs);
+	kprobe_multi_link_prog_run(link, get_ftrace_entry_ip(fentry_ip), fregs);
 }
 
 static int symbols_cmp_r(const void *a, const void *b, const void *priv)
