@@ -1731,23 +1731,43 @@ static void invoke_bpf_mod_ret(struct jit_ctx *ctx, struct bpf_tramp_links *tl,
 	}
 }
 
-static void save_args(struct jit_ctx *ctx, int args_off, int nargs)
+static void save_args(struct jit_ctx *ctx, int args_off, int nargs,
+		      const struct btf_func_model *m)
 {
-	int i;
+	int i, j, nr_regs;
 
-	for (i = 0; i < nargs; i++) {
-		emit(A64_STR64I(i, A64_SP, args_off), ctx);
-		args_off += 8;
+	for (i = 0, j = 0; i < nargs; i++) {
+		if (m->arg_flags[i] & BTF_FMODEL_STRUCT_ARG)
+			nr_regs = (m->arg_size[i] + 7) / 8;
+		else
+			nr_regs = 1;
+
+		while (nr_regs) {
+			emit(A64_STR64I(j, A64_SP, args_off), ctx);
+			args_off += 8;
+			nr_regs--;
+			j++;
+		}
 	}
 }
 
-static void restore_args(struct jit_ctx *ctx, int args_off, int nargs)
+static void restore_args(struct jit_ctx *ctx, int args_off, int nargs,
+			 const struct btf_func_model *m)
 {
-	int i;
+	int i, j, nr_regs;
 
-	for (i = 0; i < nargs; i++) {
-		emit(A64_LDR64I(i, A64_SP, args_off), ctx);
-		args_off += 8;
+	for (i = 0, j = 0; i < nargs; i++) {
+		if (m->arg_flags[i] & BTF_FMODEL_STRUCT_ARG)
+			nr_regs = (m->arg_size[i] + 7) / 8;
+		else
+			nr_regs = 1;
+
+		while (nr_regs) {
+			emit(A64_LDR64I(j, A64_SP, args_off), ctx);
+			args_off += 8;
+			nr_regs--;
+			j++;
+		}
 	}
 }
 
@@ -1764,7 +1784,8 @@ static void restore_args(struct jit_ctx *ctx, int args_off, int nargs)
  */
 static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 			      struct bpf_tramp_links *tlinks, void *orig_call,
-			      int nargs, u32 flags)
+			      int nargs, u32 flags, int extra_nregs,
+			      const struct btf_func_model *m)
 {
 	int i;
 	int stack_size;
@@ -1799,7 +1820,7 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 	 *                  [ ...               ]
 	 * SP + args_off    [ arg1              ]
 	 *
-	 * SP + nargs_off   [ args count        ]
+	 * SP + nargs_off   [ arg regs count    ]
 	 *
 	 * SP + ip_off      [ traced function   ] BPF_TRAMP_F_IP_ARG flag
 	 *
@@ -1822,7 +1843,7 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 
 	args_off = stack_size;
 	/* room for args */
-	stack_size += nargs * 8;
+	stack_size += nargs * 8 + extra_nregs * 8;
 
 	/* room for return value */
 	retval_off = stack_size;
@@ -1865,12 +1886,12 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 		emit(A64_STR64I(A64_R(10), A64_SP, ip_off), ctx);
 	}
 
-	/* save args count*/
-	emit(A64_MOVZ(1, A64_R(10), nargs, 0), ctx);
+	/* save arg regs count*/
+	emit(A64_MOVZ(1, A64_R(10), nargs + extra_nregs, 0), ctx);
 	emit(A64_STR64I(A64_R(10), A64_SP, nargs_off), ctx);
 
 	/* save args */
-	save_args(ctx, args_off, nargs);
+	save_args(ctx, args_off, nargs, m);
 
 	/* save callee saved registers */
 	emit(A64_STR64I(A64_R(19), A64_SP, regs_off), ctx);
@@ -1897,7 +1918,7 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 	}
 
 	if (flags & BPF_TRAMP_F_CALL_ORIG) {
-		restore_args(ctx, args_off, nargs);
+		restore_args(ctx, args_off, nargs, m);
 		/* call original func */
 		emit(A64_LDR64I(A64_R(10), A64_SP, retaddr_off), ctx);
 		emit(A64_BLR(A64_R(10)), ctx);
@@ -1925,7 +1946,7 @@ static int prepare_trampoline(struct jit_ctx *ctx, struct bpf_tramp_image *im,
 	}
 
 	if (flags & BPF_TRAMP_F_RESTORE_REGS)
-		restore_args(ctx, args_off, nargs);
+		restore_args(ctx, args_off, nargs, m);
 
 	/* restore callee saved register x19 and x20 */
 	emit(A64_LDR64I(A64_R(19), A64_SP, regs_off), ctx);
@@ -1965,7 +1986,7 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image,
 				u32 flags, struct bpf_tramp_links *tlinks,
 				void *orig_call)
 {
-	int i, ret;
+	int i, ret, extra_nregs = 0;
 	int nargs = m->nr_args;
 	int max_insns = ((long)image_end - (long)image) / AARCH64_INSN_SIZE;
 	struct jit_ctx ctx = {
@@ -1973,17 +1994,17 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image,
 		.idx = 0,
 	};
 
-	/* the first 8 arguments are passed by registers */
-	if (nargs > 8)
-		return -ENOTSUPP;
-
-	/* don't support struct argument */
+	/* extra registers needed for struct argument */
 	for (i = 0; i < MAX_BPF_FUNC_ARGS; i++) {
 		if (m->arg_flags[i] & BTF_FMODEL_STRUCT_ARG)
-			return -ENOTSUPP;
+			extra_nregs += (m->arg_size[i] + 7) / 8 - 1;
 	}
 
-	ret = prepare_trampoline(&ctx, im, tlinks, orig_call, nargs, flags);
+	/* the first 8 registers are used for arguments */
+	if (nargs + extra_nregs > 8)
+		return -ENOTSUPP;
+
+	ret = prepare_trampoline(&ctx, im, tlinks, orig_call, nargs, flags, extra_nregs, m);
 	if (ret < 0)
 		return ret;
 
@@ -1994,7 +2015,7 @@ int arch_prepare_bpf_trampoline(struct bpf_tramp_image *im, void *image,
 	ctx.idx = 0;
 
 	jit_fill_hole(image, (unsigned int)(image_end - image));
-	ret = prepare_trampoline(&ctx, im, tlinks, orig_call, nargs, flags);
+	ret = prepare_trampoline(&ctx, im, tlinks, orig_call, nargs, flags, extra_nregs, m);
 
 	if (ret > 0 && validate_code(&ctx) < 0)
 		ret = -EINVAL;
